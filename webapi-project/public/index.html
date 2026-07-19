@@ -9,20 +9,30 @@
   <body>
     <header class="site-nav" aria-label="maiscore">
       <a class="wordmark" href="/" aria-label="maiscore home">maiscore</a>
-      <span class="nav-note">JP maimai score image</span>
+      <div class="nav-actions">
+        <span class="nav-note" data-i18n="navNote">JP maimai score image</span>
+        <label class="language-picker" aria-label="Language">
+          <select id="languageSelect">
+            <option value="zh-Hans">简体中文</option>
+            <option value="en">English</option>
+            <option value="zh-Hant">繁體中文</option>
+            <option value="ko">한국어</option>
+          </select>
+        </label>
+      </div>
     </header>
 
     <main class="app-shell">
       <section class="hero" aria-labelledby="page-title">
         <h1 id="page-title">maiscore</h1>
         <p class="intro">
-          <span>输入 Aime 卡号，</span>
-          <span>生成日服成绩图。</span>
+          <span data-i18n="introLine1">输入 Aime 卡号，</span>
+          <span data-i18n="introLine2">生成日服成绩图。</span>
         </p>
 
         <div class="score-panel">
           <form id="scoreForm" class="score-form">
-            <label class="access-label" for="accessCodeInput">Aime access code</label>
+            <label class="access-label" for="accessCodeInput" data-i18n="accessLabel">Aime access code</label>
             <div class="bind-row">
               <input
                 id="accessCodeInput"
@@ -34,12 +44,12 @@
                 placeholder="0000 0000 0000 0000 0000"
               />
               <button id="queryButton" class="primary-button" type="submit">
-                查询
+                <span data-i18n="queryButton">查询</span>
               </button>
             </div>
 
             <label class="field">
-              <span>成绩类型</span>
+              <span data-i18n="scoreTypeLabel">成绩类型</span>
               <select id="cmdTypeInput" name="cmdType">
                 <option value="best50">Best 50</option>
                 <option value="best40">Best 40</option>
@@ -56,7 +66,7 @@
 
           <div class="status-box" aria-live="polite">
             <span class="status-dot" aria-hidden="true"></span>
-            <p id="statusText">等待输入卡号。</p>
+            <p id="statusText" data-status-key="waiting">等待输入卡号。</p>
           </div>
         </div>
 

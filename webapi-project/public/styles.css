@@ -60,6 +60,31 @@ body {
   font-weight: 500;
 }
 
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.language-picker {
+  display: block;
+}
+
+.language-picker select {
+  min-height: 30px;
+  width: auto;
+  border-radius: 999px;
+  padding: 0 28px 0 12px;
+  border-color: rgba(0, 0, 0, 0.1);
+  background-color: rgba(255, 255, 255, 0.74);
+  background-position:
+    calc(100% - 15px) 13px,
+    calc(100% - 10px) 13px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 560;
+}
+
 .app-shell {
   min-height: calc(100vh - 48px);
   padding: 58px 22px 72px;
@@ -172,12 +197,16 @@ select:focus {
 button {
   min-height: 48px;
   border: 0;
-  border-radius: 8px;
-  padding: 0 22px;
+  border-radius: 999px;
+  padding: 0 24px;
   font: inherit;
   font-size: 16px;
   font-weight: 650;
   cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
 button:disabled {
@@ -191,13 +220,21 @@ button:focus-visible {
 }
 
 .primary-button {
-  min-width: 88px;
+  min-width: 104px;
   background: var(--blue);
   color: white;
+  box-shadow: 0 8px 22px rgba(0, 113, 227, 0.24);
 }
 
 .primary-button:hover:not(:disabled) {
   background: var(--blue-hover);
+  box-shadow: 0 10px 26px rgba(0, 113, 227, 0.3);
+  transform: translateY(-1px);
+}
+
+.primary-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 5px 16px rgba(0, 113, 227, 0.22);
 }
 
 .status-box {
@@ -260,6 +297,10 @@ button:focus-visible {
 
   .nav-note {
     display: none;
+  }
+
+  .language-picker select {
+    max-width: 122px;
   }
 
   .app-shell {

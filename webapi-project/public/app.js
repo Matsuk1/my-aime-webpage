@@ -2,6 +2,7 @@ const scoreForm = document.querySelector("#scoreForm");
 const queryButton = document.querySelector("#queryButton");
 const accessCodeInput = document.querySelector("#accessCodeInput");
 const cmdTypeInput = document.querySelector("#cmdTypeInput");
+const languageSelect = document.querySelector("#languageSelect");
 const statusText = document.querySelector("#statusText");
 const scoreResult = document.querySelector("#scoreResult");
 const scoreImage = document.querySelector("#scoreImage");
@@ -10,9 +11,156 @@ let countdownTimer = null;
 let availabilityTimer = null;
 let scoreImageUrl = "";
 let isBusy = false;
+let currentLanguage = "zh-Hans";
+
+const messages = {
+  "zh-Hans": {
+    navNote: "日服 maimai 成绩图",
+    introLine1: "输入 Aime 卡号，",
+    introLine2: "生成日服成绩图。",
+    accessLabel: "Aime access code",
+    queryButton: "查询",
+    scoreTypeLabel: "成绩类型",
+    waiting: "等待输入卡号。",
+    removeStarted: "正在清理...",
+    removeFailed: "清理失败。",
+    removed: () => "已清理。",
+    boundCountdown: (slotNo, seconds) => `${seconds}s 后自动清理。`,
+    queueCountdown: (seconds) => `等待 ${seconds}s。`,
+    checking: "检查中...",
+    checkFailed: "无法检查当前排队状态。",
+    ready: "现在可以查询。",
+    noSlot: "暂无空位。",
+    unavailable: "可直接查询。",
+    invalidCode: "卡号需要是 20 位数字。",
+    working: "生成中...",
+    queryFailed: "查询失败。",
+    existingSlot: () => "已生成。",
+    clearedExpired: () => "已清理过期卡。",
+    generated: "已生成。",
+  },
+  en: {
+    navNote: "JP maimai score image",
+    introLine1: "Enter your Aime code,",
+    introLine2: "get a JP score card.",
+    accessLabel: "Aime access code",
+    queryButton: "Get score",
+    scoreTypeLabel: "Score type",
+    waiting: "Waiting for an Aime code.",
+    removeStarted: "Cleaning...",
+    removeFailed: "Cleanup failed.",
+    removed: () => "Cleaned.",
+    boundCountdown: (slotNo, seconds) => `Auto cleanup in ${seconds}s.`,
+    queueCountdown: (seconds) => `Wait ${seconds}s.`,
+    checking: "Checking...",
+    checkFailed: "Could not check queue status.",
+    ready: "Ready to query.",
+    noSlot: "No slot available.",
+    unavailable: "Ready.",
+    invalidCode: "The card code must be 20 digits.",
+    working: "Generating...",
+    queryFailed: "Query failed.",
+    existingSlot: () => "Done.",
+    clearedExpired: () => "Expired card cleared.",
+    generated: "Done.",
+  },
+  "zh-Hant": {
+    navNote: "日服 maimai 成績圖",
+    introLine1: "輸入 Aime 卡號，",
+    introLine2: "生成日服成績圖。",
+    accessLabel: "Aime access code",
+    queryButton: "查詢",
+    scoreTypeLabel: "成績類型",
+    waiting: "等待輸入卡號。",
+    removeStarted: "正在清理...",
+    removeFailed: "清理失敗。",
+    removed: () => "已清理。",
+    boundCountdown: (slotNo, seconds) => `${seconds}s 後自動清理。`,
+    queueCountdown: (seconds) => `等待 ${seconds}s。`,
+    checking: "檢查中...",
+    checkFailed: "無法檢查目前排隊狀態。",
+    ready: "現在可以查詢。",
+    noSlot: "暫無空位。",
+    unavailable: "可直接查詢。",
+    invalidCode: "卡號需要是 20 位數字。",
+    working: "生成中...",
+    queryFailed: "查詢失敗。",
+    existingSlot: () => "已生成。",
+    clearedExpired: () => "已清理過期卡。",
+    generated: "已生成。",
+  },
+  ko: {
+    navNote: "일본 서버 maimai 스코어 이미지",
+    introLine1: "Aime 카드 번호를 입력하고,",
+    introLine2: "일본 서버 성과 이미지를 생성하세요.",
+    accessLabel: "Aime access code",
+    queryButton: "조회",
+    scoreTypeLabel: "성과 유형",
+    waiting: "카드 번호 입력을 기다리는 중입니다.",
+    removeStarted: "정리 중...",
+    removeFailed: "정리 실패.",
+    removed: () => "정리 완료.",
+    boundCountdown: (slotNo, seconds) => `${seconds}초 후 자동 정리.`,
+    queueCountdown: (seconds) => `${seconds}초 대기.`,
+    checking: "확인 중...",
+    checkFailed: "대기 상태를 확인할 수 없습니다.",
+    ready: "지금 조회할 수 있습니다.",
+    noSlot: "빈 슬롯 없음.",
+    unavailable: "바로 조회 가능.",
+    invalidCode: "카드 번호는 숫자 20자리여야 합니다.",
+    working: "생성 중...",
+    queryFailed: "조회에 실패했습니다.",
+    existingSlot: () => "완료.",
+    clearedExpired: () => "만료 카드 정리 완료.",
+    generated: "완료.",
+  },
+};
+
+function t(key, ...args) {
+  const value = messages[currentLanguage]?.[key] || messages["zh-Hans"][key] || key;
+  return typeof value === "function" ? value(...args) : value;
+}
 
 function setStatus(message) {
   statusText.textContent = message;
+}
+
+function setStatusKey(key, ...args) {
+  statusText.dataset.statusKey = key;
+  statusText.dataset.statusArgs = JSON.stringify(args);
+  setStatus(t(key, ...args));
+}
+
+function applyLanguage(language) {
+  currentLanguage = messages[language] ? language : "zh-Hans";
+  document.documentElement.lang = currentLanguage;
+  languageSelect.value = currentLanguage;
+
+  for (const element of document.querySelectorAll("[data-i18n]")) {
+    element.textContent = t(element.dataset.i18n);
+  }
+
+  if (statusText.dataset.statusKey) {
+    const args = JSON.parse(statusText.dataset.statusArgs || "[]");
+    setStatus(t(statusText.dataset.statusKey, ...args));
+  }
+}
+
+function preferredLanguage() {
+  const saved = localStorage.getItem("maiscore-language");
+
+  if (messages[saved]) {
+    return saved;
+  }
+
+  const language = navigator.language || "";
+
+  if (language.startsWith("ko")) return "ko";
+  if (language.toLowerCase().includes("hant") || ["zh-tw", "zh-hk", "zh-mo"].includes(language.toLowerCase())) {
+    return "zh-Hant";
+  }
+  if (language.startsWith("en")) return "en";
+  return "zh-Hans";
 }
 
 function setScoreImage(blob) {
@@ -67,7 +215,7 @@ function formatAccessCode(value) {
 }
 
 async function removeBoundCard(boundSlotNo) {
-  setStatus("5 分钟已到，正在解除绑定...");
+  setStatusKey("removeStarted");
 
   const response = await fetch("/api/my-aime/remove", {
     method: "POST",
@@ -79,10 +227,10 @@ async function removeBoundCard(boundSlotNo) {
   const result = await response.json();
 
   if (!response.ok || !result.ok) {
-    throw new Error(result.error || "解除绑定失败。");
+    throw new Error(result.error || t("removeFailed"));
   }
 
-  setStatus(`已解除 No.${result.removedSlotNo} 的绑定。`);
+  setStatusKey("removed", result.removedSlotNo);
 }
 
 function scheduleRemove(boundSlotNo, expiresAt) {
@@ -92,7 +240,7 @@ function scheduleRemove(boundSlotNo, expiresAt) {
 
   countdownTimer = setInterval(() => {
     const secondsLeft = Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000));
-    setStatus(`绑定完成，已绑定到 No.${boundSlotNo}。将在 ${secondsLeft} 秒后自动解除绑定。`);
+    setStatusKey("boundCountdown", boundSlotNo, secondsLeft);
 
     if (secondsLeft <= 0) {
       clearInterval(countdownTimer);
@@ -122,7 +270,7 @@ function scheduleAvailabilityCountdown(nextAvailableAt) {
     }
 
     const secondsLeft = Math.max(0, Math.ceil((nextAvailableAtMs - Date.now()) / 1000));
-    setStatus(`当前需要排队，预计 ${secondsLeft} 秒后有空卡槽。`);
+    setStatusKey("queueCountdown", secondsLeft);
 
     if (secondsLeft <= 0) {
       clearAvailabilityTimer();
@@ -136,7 +284,7 @@ async function checkAvailability() {
     return;
   }
 
-  setStatus("正在检查卡槽是否需要排队...");
+  setStatusKey("checking");
 
   try {
     const response = await fetch("/api/my-aime/status", {
@@ -148,12 +296,12 @@ async function checkAvailability() {
     const result = await response.json();
 
     if (!response.ok || !result.ok) {
-      throw new Error(result.error || "无法检查当前排队状态。");
+      throw new Error(result.error || t("checkFailed"));
     }
 
     if (result.state === "ready") {
       clearAvailabilityTimer();
-      setStatus("现在可以查询。");
+      setStatusKey("ready");
       return;
     }
 
@@ -162,10 +310,10 @@ async function checkAvailability() {
       return;
     }
 
-    setStatus(result.message || "当前没有可用空卡槽。");
+    setStatus(result.message || t("noSlot"));
   } catch (error) {
     console.warn("Availability check failed:", error);
-    setStatus("暂时无法预检排队状态，可以直接输入卡号查询。");
+    setStatusKey("unavailable");
   }
 }
 
@@ -177,13 +325,18 @@ accessCodeInput.addEventListener("input", () => {
   accessCodeInput.value = formatAccessCode(accessCodeInput.value);
 });
 
+languageSelect.addEventListener("change", () => {
+  localStorage.setItem("maiscore-language", languageSelect.value);
+  applyLanguage(languageSelect.value);
+});
+
 scoreForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const accessCode = normalizeAccessCode(accessCodeInput.value);
 
   if (!/^\d{20}$/.test(accessCode)) {
-    setStatus("卡号需要是 20 位数字。");
+    setStatusKey("invalidCode");
     accessCodeInput.focus();
     return;
   }
@@ -193,7 +346,7 @@ scoreForm.addEventListener("submit", async (event) => {
   clearAvailabilityTimer();
   clearRemoveTimers();
   clearScoreImage();
-  setStatus("正在绑定 Aime 卡并生成日服成绩图...");
+  setStatusKey("working");
 
   try {
     const response = await fetch("/api/my-aime/score", {
@@ -213,7 +366,7 @@ scoreForm.addEventListener("submit", async (event) => {
       if (result.boundSlotNo && result.session?.expiresAt) {
         scheduleRemove(result.boundSlotNo, result.session.expiresAt);
       }
-      throw new Error(result.error || "查询失败。");
+      throw new Error(result.error || t("queryFailed"));
     }
 
     const blob = await response.blob();
@@ -224,18 +377,18 @@ scoreForm.addEventListener("submit", async (event) => {
 
     setScoreImage(blob);
     if (alreadyBound) {
-      setStatus(`已使用账号内现有绑定卡槽 No.${boundSlotNo} 查询，不会自动解除绑定。`);
+      setStatusKey("existingSlot", boundSlotNo);
       return;
     }
 
     if (removedExpiredSlotNos.length) {
-      setStatus(`已先清理过期卡槽：${removedExpiredSlotNos.join(", ")}。`);
+      setStatusKey("clearedExpired", removedExpiredSlotNos);
     }
 
     if (expiresAt) {
       scheduleRemove(boundSlotNo, expiresAt);
     } else {
-      setStatus("成绩图已生成。");
+      setStatusKey("generated");
     }
   } catch (error) {
     setStatus(error.message);
@@ -245,4 +398,5 @@ scoreForm.addEventListener("submit", async (event) => {
   }
 });
 
+applyLanguage(preferredLanguage());
 checkAvailability();
