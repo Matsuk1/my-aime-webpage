@@ -15,6 +15,7 @@ let availabilityTimer = null;
 let scoreImageUrl = "";
 let isBusy = false;
 let currentLanguage = "zh-Hans";
+let resetViewportTimer = null;
 
 const messages = {
   "zh-Hans": {
@@ -345,8 +346,29 @@ function readCsvHeader(response, name) {
   return (response.headers.get(name) || "").split(",").filter(Boolean);
 }
 
+function resetMobileViewport() {
+  clearTimeout(resetViewportTimer);
+  resetViewportTimer = setTimeout(() => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
+    window.scrollTo(0, 0);
+  }, 120);
+}
+
 accessCodeInput.addEventListener("input", () => {
   accessCodeInput.value = formatAccessCode(accessCodeInput.value);
+});
+
+for (const control of [accessCodeInput, cmdTypeInput, languageSelect]) {
+  control.addEventListener("blur", resetMobileViewport);
+}
+
+window.visualViewport?.addEventListener("resize", () => {
+  if (!document.activeElement || document.activeElement === document.body) {
+    resetMobileViewport();
+  }
 });
 
 languageSelect.addEventListener("change", () => {
