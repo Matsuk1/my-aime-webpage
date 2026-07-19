@@ -4,8 +4,11 @@ const accessCodeInput = document.querySelector("#accessCodeInput");
 const cmdTypeInput = document.querySelector("#cmdTypeInput");
 const languageSelect = document.querySelector("#languageSelect");
 const statusText = document.querySelector("#statusText");
+const scoreDialog = document.querySelector("#scoreDialog");
 const scoreResult = document.querySelector("#scoreResult");
 const scoreImage = document.querySelector("#scoreImage");
+const closeDialogButton = document.querySelector("#closeDialogButton");
+const downloadScoreButton = document.querySelector("#downloadScoreButton");
 let removeTimer = null;
 let countdownTimer = null;
 let availabilityTimer = null;
@@ -38,6 +41,8 @@ const messages = {
     existingSlot: () => "已生成。",
     clearedExpired: () => "已清理过期卡。",
     generated: "已生成。",
+    closeDialog: "关闭",
+    downloadScore: "下载",
   },
   en: {
     navNote: "JP maimai score image",
@@ -63,6 +68,8 @@ const messages = {
     existingSlot: () => "Done.",
     clearedExpired: () => "Expired card cleared.",
     generated: "Done.",
+    closeDialog: "Close",
+    downloadScore: "Download",
   },
   "zh-Hant": {
     navNote: "日服 maimai 成績圖",
@@ -88,6 +95,8 @@ const messages = {
     existingSlot: () => "已生成。",
     clearedExpired: () => "已清理過期卡。",
     generated: "已生成。",
+    closeDialog: "關閉",
+    downloadScore: "下載",
   },
   ko: {
     navNote: "일본 서버 maimai 스코어 이미지",
@@ -113,6 +122,8 @@ const messages = {
     existingSlot: () => "완료.",
     clearedExpired: () => "만료 카드 정리 완료.",
     generated: "완료.",
+    closeDialog: "닫기",
+    downloadScore: "다운로드",
   },
 };
 
@@ -139,6 +150,9 @@ function applyLanguage(language) {
   for (const element of document.querySelectorAll("[data-i18n]")) {
     element.textContent = t(element.dataset.i18n);
   }
+
+  closeDialogButton.setAttribute("aria-label", t("closeDialog"));
+  downloadScoreButton.setAttribute("aria-label", t("downloadScore"));
 
   if (statusText.dataset.statusKey) {
     const args = JSON.parse(statusText.dataset.statusArgs || "[]");
@@ -170,7 +184,12 @@ function setScoreImage(blob) {
 
   scoreImageUrl = URL.createObjectURL(blob);
   scoreImage.src = scoreImageUrl;
-  scoreResult.hidden = false;
+  downloadScoreButton.href = scoreImageUrl;
+  downloadScoreButton.download = `maiscore-${Date.now()}.png`;
+
+  if (!scoreDialog.open) {
+    scoreDialog.showModal();
+  }
 }
 
 function clearScoreImage() {
@@ -180,7 +199,11 @@ function clearScoreImage() {
 
   scoreImageUrl = "";
   scoreImage.removeAttribute("src");
-  scoreResult.hidden = true;
+  downloadScoreButton.removeAttribute("href");
+
+  if (scoreDialog.open) {
+    scoreDialog.close();
+  }
 }
 
 function clearRemoveTimers() {
@@ -328,6 +351,18 @@ accessCodeInput.addEventListener("input", () => {
 languageSelect.addEventListener("change", () => {
   localStorage.setItem("maiscore-language", languageSelect.value);
   applyLanguage(languageSelect.value);
+});
+
+closeDialogButton.addEventListener("click", () => {
+  if (scoreDialog.open) {
+    scoreDialog.close();
+  }
+});
+
+scoreDialog.addEventListener("click", (event) => {
+  if (event.target === scoreDialog) {
+    scoreDialog.close();
+  }
 });
 
 scoreForm.addEventListener("submit", async (event) => {
