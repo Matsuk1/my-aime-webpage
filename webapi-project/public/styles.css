@@ -50,10 +50,20 @@ body {
 }
 
 .wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: var(--text);
   font-size: 15px;
   font-weight: 650;
   text-decoration: none;
+}
+
+.brand-logo {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.14);
 }
 
 .nav-note {
