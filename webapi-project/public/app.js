@@ -353,8 +353,12 @@ function resetMobileViewport() {
       document.activeElement.blur();
     }
 
-    window.scrollTo(0, 0);
-  }, 120);
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "smooth",
+    });
+  }, 180);
 }
 
 accessCodeInput.addEventListener("input", () => {
