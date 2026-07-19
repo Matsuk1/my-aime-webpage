@@ -357,6 +357,7 @@ button:focus-visible {
   display: inline-grid;
   width: 56px;
   min-width: 56px;
+  min-height: 36px;
   height: 36px;
   place-items: center;
   border: 0;
@@ -368,6 +369,12 @@ button:focus-visible {
   line-height: 1;
   text-decoration: none;
   pointer-events: auto;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease,
+    filter 140ms ease;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.78),
     0 10px 26px rgba(0, 0, 0, 0.14);
@@ -384,12 +391,34 @@ button:focus-visible {
   backdrop-filter: blur(18px) saturate(1.45);
 }
 
+.dialog-button--close:hover {
+  background: rgba(255, 255, 255, 0.96);
+}
+
 .dialog-button--download {
   background: var(--blue);
   color: #ffffff;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.25),
     0 10px 26px rgba(0, 113, 227, 0.28);
+}
+
+.dialog-button--download:hover {
+  background: var(--blue-hover);
+}
+
+.dialog-button:active {
+  transform: scale(0.94);
+  filter: brightness(0.96);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.12),
+    0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.dialog-button--download:active {
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.18),
+    0 4px 14px rgba(0, 113, 227, 0.18);
 }
 
 .score-dialog .score-result img {
@@ -467,6 +496,7 @@ button:focus-visible {
   .dialog-button {
     width: 52px;
     min-width: 52px;
+    min-height: 36px;
     height: 36px;
   }
 }
