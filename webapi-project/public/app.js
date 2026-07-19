@@ -16,6 +16,7 @@ let scoreImageUrl = "";
 let isBusy = false;
 let currentLanguage = "zh-Hans";
 let resetViewportTimer = null;
+let dialogCloseTimer = null;
 
 const messages = {
   "zh-Hans": {
@@ -203,9 +204,7 @@ function clearScoreImage() {
   scoreImage.removeAttribute("src");
   downloadScoreButton.removeAttribute("href");
 
-  if (scoreDialog.open) {
-    scoreDialog.close();
-  }
+  closeScoreDialog({ immediate: true });
 }
 
 function clearRemoveTimers() {
@@ -381,16 +380,39 @@ languageSelect.addEventListener("change", () => {
 });
 
 closeDialogButton.addEventListener("click", () => {
-  if (scoreDialog.open) {
-    scoreDialog.close();
-  }
+  closeScoreDialog();
 });
 
 scoreDialog.addEventListener("click", (event) => {
   if (event.target === scoreDialog) {
-    scoreDialog.close();
+    closeScoreDialog();
   }
 });
+
+scoreDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeScoreDialog();
+});
+
+function closeScoreDialog(options = {}) {
+  if (!scoreDialog.open) {
+    return;
+  }
+
+  clearTimeout(dialogCloseTimer);
+
+  if (options.immediate) {
+    scoreDialog.classList.remove("is-closing");
+    scoreDialog.close();
+    return;
+  }
+
+  scoreDialog.classList.add("is-closing");
+  dialogCloseTimer = setTimeout(() => {
+    scoreDialog.classList.remove("is-closing");
+    scoreDialog.close();
+  }, 180);
+}
 
 scoreForm.addEventListener("submit", async (event) => {
   event.preventDefault();
