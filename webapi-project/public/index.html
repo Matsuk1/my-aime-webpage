@@ -14,9 +14,11 @@
 
     <main class="app-shell">
       <section class="hero" aria-labelledby="page-title">
-        <p class="eyebrow">Aime temporary score lookup</p>
         <h1 id="page-title">maiscore</h1>
-        <p class="intro">输入 Aime 卡号，生成日服成绩图。</p>
+        <p class="intro">
+          <span>输入 Aime 卡号，</span>
+          <span>生成日服成绩图。</span>
+        </p>
 
         <div class="score-panel">
           <form id="scoreForm" class="score-form">
@@ -36,26 +38,20 @@
               </button>
             </div>
 
-            <div class="field-grid">
-              <label class="field">
-                <span>成绩类型</span>
-                <select id="cmdTypeInput" name="cmdType">
-                  <option value="best50">Best 50</option>
-                  <option value="best40">Best 40</option>
-                  <option value="best35">Best 35</option>
-                  <option value="best15">Best 15</option>
-                  <option value="allb50">All Best 50</option>
-                  <option value="allb35">All Best 35</option>
-                  <option value="apb50">AP Best 50</option>
-                  <option value="fdxb50">FDX Best 50</option>
-                  <option value="idlb50">Ideal Best 50</option>
-                </select>
-              </label>
-              <label class="field">
-                <span>过滤参数</span>
-                <input id="paramsInput" name="params" type="text" placeholder="可选，例如 -lv 14" />
-              </label>
-            </div>
+            <label class="field">
+              <span>成绩类型</span>
+              <select id="cmdTypeInput" name="cmdType">
+                <option value="best50">Best 50</option>
+                <option value="best40">Best 40</option>
+                <option value="best35">Best 35</option>
+                <option value="best15">Best 15</option>
+                <option value="allb50">All Best 50</option>
+                <option value="allb35">All Best 35</option>
+                <option value="apb50">AP Best 50</option>
+                <option value="fdxb50">FDX Best 50</option>
+                <option value="idlb50">Ideal Best 50</option>
+              </select>
+            </label>
           </form>
 
           <div class="status-box" aria-live="polite">

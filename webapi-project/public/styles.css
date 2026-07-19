@@ -71,13 +71,6 @@ body {
   text-align: center;
 }
 
-.eyebrow {
-  margin: 0 0 10px;
-  color: var(--muted);
-  font-size: 18px;
-  font-weight: 600;
-}
-
 h1 {
   margin: 0;
   font-size: clamp(58px, 10vw, 118px);
@@ -93,6 +86,10 @@ h1 {
   font-size: clamp(24px, 4vw, 42px);
   font-weight: 650;
   line-height: 1.1;
+}
+
+.intro span {
+  display: inline;
 }
 
 .score-panel {
@@ -165,12 +162,6 @@ input:focus,
 select:focus {
   border-color: var(--blue);
   outline: 4px solid var(--focus);
-}
-
-.field-grid {
-  display: grid;
-  grid-template-columns: minmax(180px, 230px) 1fr;
-  gap: 10px;
 }
 
 .field {
@@ -252,6 +243,16 @@ button:focus-visible {
   box-shadow: 0 26px 80px rgba(0, 0, 0, 0.12);
 }
 
+@media (max-width: 820px) {
+  h1 {
+    font-size: clamp(52px, 15vw, 84px);
+  }
+
+  .intro {
+    font-size: clamp(24px, 6vw, 34px);
+  }
+}
+
 @media (max-width: 700px) {
   .site-nav {
     padding: 0 16px;
@@ -265,24 +266,44 @@ button:focus-visible {
     padding: 44px 16px 54px;
   }
 
-  .eyebrow {
-    font-size: 15px;
-  }
-
   .intro {
     margin-bottom: 28px;
+  }
+
+  .intro span {
+    display: block;
   }
 
   .score-panel {
     padding: 14px;
   }
 
-  .bind-row,
-  .field-grid {
+  .bind-row {
     grid-template-columns: 1fr;
   }
 
   .primary-button {
     width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .app-shell {
+    padding: 36px 12px 44px;
+  }
+
+  .score-panel {
+    padding: 12px;
+  }
+
+  input,
+  select,
+  button {
+    min-height: 46px;
+    font-size: 15px;
+  }
+
+  #statusText {
+    font-size: 13px;
   }
 }

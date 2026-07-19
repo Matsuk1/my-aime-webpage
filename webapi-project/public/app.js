@@ -2,7 +2,6 @@ const scoreForm = document.querySelector("#scoreForm");
 const queryButton = document.querySelector("#queryButton");
 const accessCodeInput = document.querySelector("#accessCodeInput");
 const cmdTypeInput = document.querySelector("#cmdTypeInput");
-const paramsInput = document.querySelector("#paramsInput");
 const statusText = document.querySelector("#statusText");
 const scoreResult = document.querySelector("#scoreResult");
 const scoreImage = document.querySelector("#scoreImage");
@@ -205,7 +204,6 @@ scoreForm.addEventListener("submit", async (event) => {
       body: JSON.stringify({
         accessCode,
         cmdType: cmdTypeInput.value,
-        params: paramsInput.value,
         timezone: -new Date().getTimezoneOffset() / 60,
       }),
     });
