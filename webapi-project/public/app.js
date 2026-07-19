@@ -189,6 +189,7 @@ function setScoreImage(blob) {
 
   if (!scoreDialog.open) {
     scoreDialog.showModal();
+    scoreDialog.focus({ preventScroll: true });
   }
 }
 

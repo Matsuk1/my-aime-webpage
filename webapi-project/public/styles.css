@@ -18,11 +18,13 @@
 
 html {
   background: var(--bg);
+  overflow-x: hidden;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   font-family:
     -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
     "Helvetica Neue", Arial, sans-serif;
@@ -318,16 +320,21 @@ button:focus-visible {
 }
 
 .score-dialog {
-  width: 100vw;
-  max-width: none;
-  height: 100vh;
-  max-height: none;
-  margin: 0;
-  padding: 78px 18px 28px;
+  width: min(94vw, 1160px);
+  max-width: 1160px;
+  max-height: min(88vh, 940px);
+  margin: auto;
+  padding: 64px 14px 14px;
   border: 0;
-  background: rgba(245, 245, 247, 0.9);
+  border-radius: 8px;
+  background: rgba(245, 245, 247, 0.94);
   color: var(--text);
   overflow: auto;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.24);
+}
+
+.score-dialog:focus {
+  outline: none;
 }
 
 .score-dialog::backdrop {
@@ -336,10 +343,10 @@ button:focus-visible {
 }
 
 .dialog-toolbar {
-  position: fixed;
-  top: max(16px, env(safe-area-inset-top));
-  left: max(16px, env(safe-area-inset-left));
-  right: max(16px, env(safe-area-inset-right));
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
   z-index: 20;
   display: flex;
   justify-content: space-between;
@@ -348,12 +355,13 @@ button:focus-visible {
 
 .dialog-button {
   display: inline-grid;
-  min-width: 48px;
-  height: 38px;
+  width: 56px;
+  min-width: 56px;
+  height: 36px;
   place-items: center;
   border: 0;
   border-radius: 999px;
-  padding: 0 18px;
+  padding: 0;
   font: inherit;
   font-size: 22px;
   font-weight: 650;
@@ -365,6 +373,11 @@ button:focus-visible {
     0 10px 26px rgba(0, 0, 0, 0.14);
 }
 
+.dialog-button:focus,
+.dialog-button:focus-visible {
+  outline: none;
+}
+
 .dialog-button--close {
   background: rgba(255, 255, 255, 0.84);
   color: var(--text);
@@ -374,6 +387,9 @@ button:focus-visible {
 .dialog-button--download {
   background: var(--blue);
   color: #ffffff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 10px 26px rgba(0, 113, 227, 0.28);
 }
 
 .score-dialog .score-result img {
@@ -391,6 +407,12 @@ button:focus-visible {
 }
 
 @media (max-width: 700px) {
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+  }
+
   .site-nav {
     padding: 0 16px;
   }
@@ -404,6 +426,9 @@ button:focus-visible {
   }
 
   .app-shell {
+    min-height: calc(100dvh - 48px);
+    max-height: calc(100dvh - 48px);
+    overflow: hidden;
     padding: 44px 16px 54px;
   }
 
@@ -428,18 +453,21 @@ button:focus-visible {
   }
 
   .score-dialog {
-    padding: 72px 10px 20px;
+    width: calc(100vw - 20px);
+    max-height: calc(100dvh - 28px);
+    padding: 58px 10px 10px;
   }
 
   .dialog-toolbar {
-    left: max(10px, env(safe-area-inset-left));
-    right: max(10px, env(safe-area-inset-right));
+    top: 10px;
+    left: 10px;
+    right: 10px;
   }
 
   .dialog-button {
-    min-width: 46px;
+    width: 52px;
+    min-width: 52px;
     height: 36px;
-    padding: 0 16px;
   }
 }
 
