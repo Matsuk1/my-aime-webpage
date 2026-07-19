@@ -137,7 +137,7 @@ body {
 
 .app-shell {
   min-height: calc(100vh - var(--nav-height));
-  padding: 58px 22px 72px;
+  padding: 58px 22px 104px;
 }
 
 .hero {
@@ -313,6 +313,20 @@ button:focus-visible {
   margin: 0;
   font-size: 14px;
   line-height: 1.45;
+}
+
+.site-footer {
+  width: min(100%, 1080px);
+  margin: -58px auto 0;
+  padding: 0 22px 28px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.site-footer p {
+  margin: 3px 0;
 }
 
 .score-result {
@@ -527,7 +541,20 @@ button:focus-visible {
     min-height: calc(100dvh - var(--nav-height) - env(safe-area-inset-top));
     max-height: calc(100dvh - var(--nav-height) - env(safe-area-inset-top));
     overflow: hidden;
-    padding: 44px 16px 54px;
+    padding: 40px 16px 112px;
+  }
+
+  .site-footer {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 6;
+    width: auto;
+    margin: 0;
+    padding: 18px 18px calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, rgba(245, 245, 247, 0), rgba(245, 245, 247, 0.96) 34%);
+    backdrop-filter: blur(14px) saturate(1.35);
   }
 
   .intro {
@@ -572,7 +599,7 @@ button:focus-visible {
 
 @media (max-width: 420px) {
   .app-shell {
-    padding: 36px 12px 44px;
+    padding: 34px 12px 108px;
   }
 
   .score-panel {

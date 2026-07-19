@@ -45,6 +45,8 @@ const messages = {
     generated: "已生成。",
     closeDialog: "关闭",
     downloadScore: "下载",
+    footerPurpose: "本项目仅面向没有 SEGA ID 的赴日游客临时查分使用。",
+    footerCopyright: "© 2026 maiscore. SEGA、Aime、maimai 为各自权利方商标；本项目与 SEGA 无关联。",
   },
   en: {
     navNote: "JP maimai score image",
@@ -72,6 +74,8 @@ const messages = {
     generated: "Done.",
     closeDialog: "Close",
     downloadScore: "Download",
+    footerPurpose: "For Japan visitors without a SEGA ID who need temporary score lookup.",
+    footerCopyright: "© 2026 maiscore. SEGA, Aime, and maimai are trademarks of their respective owners. This project is not affiliated with SEGA.",
   },
   "zh-Hant": {
     navNote: "日服 maimai 成績圖",
@@ -99,6 +103,8 @@ const messages = {
     generated: "已生成。",
     closeDialog: "關閉",
     downloadScore: "下載",
+    footerPurpose: "本專案僅面向沒有 SEGA ID 的赴日旅客臨時查分使用。",
+    footerCopyright: "© 2026 maiscore. SEGA、Aime、maimai 為各自權利方商標；本專案與 SEGA 無關聯。",
   },
   ko: {
     navNote: "일본 서버 maimai 스코어 이미지",
@@ -126,6 +132,8 @@ const messages = {
     generated: "완료.",
     closeDialog: "닫기",
     downloadScore: "다운로드",
+    footerPurpose: "SEGA ID가 없는 일본 방문객의 임시 성과 조회를 위한 프로젝트입니다.",
+    footerCopyright: "© 2026 maiscore. SEGA, Aime, maimai는 각 권리자의 상표이며, 본 프로젝트는 SEGA와 관련이 없습니다.",
   },
 };
 
