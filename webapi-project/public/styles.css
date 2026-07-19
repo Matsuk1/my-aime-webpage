@@ -10,6 +10,7 @@
   --blue-hover: #0077ed;
   --focus: rgba(0, 113, 227, 0.24);
   --shadow: 0 24px 70px rgba(0, 0, 0, 0.08);
+  --nav-height: 48px;
 }
 
 * {
@@ -42,7 +43,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 48px;
+  min-height: var(--nav-height);
   padding: 0 max(22px, calc((100vw - 1080px) / 2));
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   background: rgba(251, 251, 253, 0.76);
@@ -135,7 +136,7 @@ body {
 }
 
 .app-shell {
-  min-height: calc(100vh - 48px);
+  min-height: calc(100vh - var(--nav-height));
   padding: 58px 22px 72px;
 }
 
@@ -453,7 +454,11 @@ button:focus-visible {
   }
 
   .site-nav {
+    position: relative;
+    top: auto;
+    min-height: calc(var(--nav-height) + env(safe-area-inset-top));
     padding: 0 16px;
+    padding-top: env(safe-area-inset-top);
   }
 
   .nav-note {
@@ -465,8 +470,8 @@ button:focus-visible {
   }
 
   .app-shell {
-    min-height: calc(100dvh - 48px);
-    max-height: calc(100dvh - 48px);
+    min-height: calc(100dvh - var(--nav-height) - env(safe-area-inset-top));
+    max-height: calc(100dvh - var(--nav-height) - env(safe-area-inset-top));
     overflow: hidden;
     padding: 44px 16px 54px;
   }
