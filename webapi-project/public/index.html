@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My Aime 临时查分</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="score-panel" aria-labelledby="page-title">
+        <div class="brand-row">
+          <span class="brand-mark" aria-hidden="true">A</span>
+          <span class="brand-name">My Aime / JiETNG</span>
+        </div>
+
+        <h1 id="page-title">日服临时查分</h1>
+        <p class="intro">输入 20 位 Aime 卡号，系统会临时绑定到空卡槽并生成日服成绩图。绑定会在 5 分钟后自动解除。</p>
+
+        <form id="scoreForm" class="score-form">
+          <label for="accessCodeInput">Aime 卡号</label>
+          <div class="bind-row">
+            <input
+              id="accessCodeInput"
+              name="accessCode"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              maxlength="24"
+              placeholder="输入 20 位卡号"
+            />
+            <button id="queryButton" class="primary-button" type="submit">
+              查询
+            </button>
+          </div>
+
+          <div class="field-grid">
+            <label class="field">
+              <span>成绩类型</span>
+              <select id="cmdTypeInput" name="cmdType">
+                <option value="best50">Best 50</option>
+                <option value="best40">Best 40</option>
+                <option value="best35">Best 35</option>
+                <option value="best15">Best 15</option>
+                <option value="allb50">All Best 50</option>
+                <option value="allb35">All Best 35</option>
+                <option value="apb50">AP Best 50</option>
+                <option value="fdxb50">FDX Best 50</option>
+                <option value="idlb50">Ideal Best 50</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>过滤参数</span>
+              <input id="paramsInput" name="params" type="text" placeholder="可选，例如 -lv 14" />
+            </label>
+          </div>
+        </form>
+
+        <div class="status-box" aria-live="polite">
+          <span class="status-label">状态</span>
+          <p id="statusText">等待输入卡号。</p>
+        </div>
+
+        <figure id="scoreResult" class="score-result" hidden>
+          <img id="scoreImage" alt="日服成绩图" />
+        </figure>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

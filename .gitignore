@@ -1,0 +1,6 @@
+.DS_Store
+.wrangler/
+node_modules/
+webapi-project/.env
+webapi-project/.dev.vars
+webapi-project/node_modules/
