@@ -330,27 +330,62 @@ function thresholdCanvas(canvas) {
   return canvas;
 }
 
-function videoFrameToOcrCanvas() {
+function enhanceAccessCodeCanvas(canvas) {
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
+    const value = gray > 118 ? 0 : 255;
+    data[index] = value;
+    data[index + 1] = value;
+    data[index + 2] = value;
+  }
+
+  context.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+function cropFrameToCanvas(frame, region, options = {}) {
+  const sourceX = frame.x + frame.width * region.x;
+  const sourceY = frame.y + frame.height * region.y;
+  const sourceWidth = frame.width * region.width;
+  const sourceHeight = frame.height * region.height;
+  const scale = options.scale || 2.4;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(scannerVideo, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
+
+  return options.mode === "access-code" ? enhanceAccessCodeCanvas(canvas) : thresholdCanvas(canvas);
+}
+
+function videoFrameToOcrCanvases() {
   if (!scannerVideo.videoWidth || !scannerVideo.videoHeight) {
-    return null;
+    return [];
   }
 
   const sourceWidth = scannerVideo.videoWidth;
   const sourceHeight = scannerVideo.videoHeight;
   const cropWidth = Math.min(sourceWidth * 0.86, sourceHeight * 1.58);
   const cropHeight = cropWidth / 1.58;
-  const sourceX = Math.max(0, (sourceWidth - cropWidth) / 2);
-  const sourceY = Math.max(0, (sourceHeight - cropHeight) / 2);
-  const maxSide = 1300;
-  const scale = Math.min(1, maxSide / Math.max(cropWidth, cropHeight));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(cropWidth * scale));
-  canvas.height = Math.max(1, Math.round(cropHeight * scale));
+  const frame = {
+    x: Math.max(0, (sourceWidth - cropWidth) / 2),
+    y: Math.max(0, (sourceHeight - cropHeight) / 2),
+    width: cropWidth,
+    height: cropHeight,
+  };
 
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  context.drawImage(scannerVideo, sourceX, sourceY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
-
-  return thresholdCanvas(canvas);
+  return [
+    cropFrameToCanvas(frame, { x: 0.43, y: 0.73, width: 0.54, height: 0.16 }, { mode: "access-code", scale: 3 }),
+    cropFrameToCanvas(frame, { x: 0.38, y: 0.67, width: 0.6, height: 0.25 }, { mode: "access-code", scale: 2.4 }),
+    cropFrameToCanvas(frame, { x: 0.04, y: 0.62, width: 0.94, height: 0.34 }, { scale: 1.6 }),
+  ];
 }
 
 async function createOcrWorker() {
@@ -375,6 +410,8 @@ async function createOcrWorker() {
   }
 
   await worker.setParameters?.({
+    preserve_interword_spaces: "1",
+    tessedit_pageseg_mode: "7",
     tessedit_char_whitelist: "0123456789 ",
   });
 
@@ -397,9 +434,9 @@ async function scanVideoFrame() {
     return;
   }
 
-  const canvas = videoFrameToOcrCanvas();
+  const canvases = videoFrameToOcrCanvases();
 
-  if (!canvas) {
+  if (!canvases.length) {
     return;
   }
 
@@ -408,8 +445,16 @@ async function scanVideoFrame() {
 
   try {
     const worker = await ensureOcrWorker();
-    const result = await worker.recognize(canvas);
-    const accessCode = extractAccessCode(result.data.text || "");
+    let accessCode = "";
+
+    for (const canvas of canvases) {
+      const result = await worker.recognize(canvas);
+      accessCode = extractAccessCode(result.data.text || "");
+
+      if (accessCode) {
+        break;
+      }
+    }
 
     if (accessCode) {
       accessCodeInput.value = formatAccessCode(accessCode);
@@ -439,6 +484,7 @@ async function startScanner() {
 
   if (!scannerDialog.open) {
     scannerDialog.showModal();
+    scannerDialog.focus({ preventScroll: true });
   }
 
   // Force the off-screen state to paint before moving the sheet into view.
