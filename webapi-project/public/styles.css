@@ -483,6 +483,8 @@ button:focus-visible {
 }
 
 .scanner-dialog {
+  position: fixed;
+  inset: 0;
   width: 100vw;
   max-width: none;
   height: 100dvh;
@@ -493,6 +495,10 @@ button:focus-visible {
   background: transparent;
   color: var(--text);
   overflow: hidden;
+}
+
+.scanner-dialog:not([open]) {
+  display: none;
 }
 
 .scanner-dialog:focus {
@@ -522,6 +528,12 @@ button:focus-visible {
   box-shadow: 0 -22px 70px rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(24px) saturate(1.45);
   animation: scanner-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  will-change: transform;
+}
+
+.scanner-dialog.is-opening .scanner-sheet {
+  animation: none;
+  transform: translateY(100%);
 }
 
 .scanner-dialog.is-closing .scanner-sheet {

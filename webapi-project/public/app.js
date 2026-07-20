@@ -433,10 +433,15 @@ async function startScanner() {
 
   clearTimeout(scannerCloseTimer);
   scannerDialog.classList.remove("is-closing");
+  scannerDialog.classList.add("is-opening");
 
   if (!scannerDialog.open) {
     scannerDialog.showModal();
   }
+
+  requestAnimationFrame(() => {
+    scannerDialog.classList.remove("is-opening");
+  });
 
   isOcrBusy = true;
   scanButton.disabled = true;
