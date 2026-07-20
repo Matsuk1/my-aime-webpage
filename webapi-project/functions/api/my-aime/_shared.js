@@ -211,6 +211,26 @@ export function findErrorMessage(html) {
   return "";
 }
 
+export function classifyAimeError(message) {
+  if (!message) {
+    return null;
+  }
+
+  if (message.includes("AMPECA1010_207") || message.includes("未使用のAime")) {
+    return "UNUSED_AIME";
+  }
+
+  if (message.includes("AMPECA1010_204") || message.includes("アクセスコードが間違っています")) {
+    return "INVALID_AIME_CODE";
+  }
+
+  if (message.includes("AMPEWL1019") || message.includes("すでに登録されています")) {
+    return "ALREADY_REGISTERED";
+  }
+
+  return null;
+}
+
 export function getAttribute(html, name) {
   const match = html.match(new RegExp(`${name}=["']([^"']+)["']`, "i"));
   return match?.[1] || "";

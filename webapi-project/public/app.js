@@ -15,6 +15,8 @@ let isBusy = false;
 let currentLanguage = "zh-Hans";
 let resetViewportTimer = null;
 let dialogCloseTimer = null;
+const availabilityCacheKey = "maiscore-availability-cache";
+const availabilityCacheTtlMs = 60 * 1000;
 
 const messages = {
   "zh-Hans": {
@@ -32,6 +34,8 @@ const messages = {
     noSlot: "暂无空位。",
     unavailable: "可直接查询。",
     invalidCode: "卡号需要是 20 位数字。",
+    invalidAimeCode: "卡号不正确。",
+    unusedAime: "这张 Aime 还未使用，先在支持的游戏中游玩一次后再试。",
     working: "生成中...",
     queryFailed: "查询失败。",
     existingSlot: () => "已生成。",
@@ -57,6 +61,8 @@ const messages = {
     noSlot: "No slot available.",
     unavailable: "Ready.",
     invalidCode: "The card code must be 20 digits.",
+    invalidAimeCode: "The Aime code is incorrect.",
+    unusedAime: "This Aime has not been used yet. Play a supported game once, then try again.",
     working: "Generating...",
     queryFailed: "Query failed.",
     existingSlot: () => "Done.",
@@ -82,6 +88,8 @@ const messages = {
     noSlot: "暫無空位。",
     unavailable: "可直接查詢。",
     invalidCode: "卡號需要是 20 位數字。",
+    invalidAimeCode: "卡號不正確。",
+    unusedAime: "這張 Aime 尚未使用，請先在支援的遊戲中遊玩一次後再試。",
     working: "生成中...",
     queryFailed: "查詢失敗。",
     existingSlot: () => "已生成。",
@@ -107,6 +115,8 @@ const messages = {
     noSlot: "빈 슬롯 없음.",
     unavailable: "바로 조회 가능.",
     invalidCode: "카드 번호는 숫자 20자리여야 합니다.",
+    invalidAimeCode: "Aime 카드 번호가 올바르지 않습니다.",
+    unusedAime: "이 Aime는 아직 사용되지 않았습니다. 지원 게임을 한 번 플레이한 뒤 다시 시도하세요.",
     working: "생성 중...",
     queryFailed: "조회에 실패했습니다.",
     existingSlot: () => "완료.",
@@ -230,14 +240,74 @@ function scheduleAvailabilityCountdown(nextAvailableAt) {
 
     if (secondsLeft <= 0) {
       clearAvailabilityTimer();
-      checkAvailability();
+      checkAvailability({ force: true });
     }
   }, 1000);
 }
 
-async function checkAvailability() {
+function cachedAvailability() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(availabilityCacheKey) || "null");
+
+    if (!cached || Date.now() - cached.cachedAt > availabilityCacheTtlMs) {
+      return null;
+    }
+
+    return cached.result;
+  } catch {
+    return null;
+  }
+}
+
+function cacheAvailability(result) {
+  try {
+    localStorage.setItem(
+      availabilityCacheKey,
+      JSON.stringify({
+        cachedAt: Date.now(),
+        result,
+      }),
+    );
+  } catch {
+    // Cache is only a resource saver; failing to persist it should not block the app.
+  }
+}
+
+function clearAvailabilityCache() {
+  try {
+    localStorage.removeItem(availabilityCacheKey);
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+function applyAvailabilityResult(result) {
+  if (result.state === "ready") {
+    clearAvailabilityTimer();
+    setStatusKey("ready");
+    return;
+  }
+
+  if (result.state === "queue" && result.nextAvailableAt) {
+    scheduleAvailabilityCountdown(result.nextAvailableAt);
+    return;
+  }
+
+  setStatusKey("noSlot");
+}
+
+async function checkAvailability(options = {}) {
   if (isBusy) {
     return;
+  }
+
+  if (!options.force) {
+    const cached = cachedAvailability();
+
+    if (cached) {
+      applyAvailabilityResult(cached);
+      return;
+    }
   }
 
   setStatusKey("checking");
@@ -255,18 +325,8 @@ async function checkAvailability() {
       throw new Error(result.error || t("checkFailed"));
     }
 
-    if (result.state === "ready") {
-      clearAvailabilityTimer();
-      setStatusKey("ready");
-      return;
-    }
-
-    if (result.state === "queue" && result.nextAvailableAt) {
-      scheduleAvailabilityCountdown(result.nextAvailableAt);
-      return;
-    }
-
-    setStatusKey("noSlot");
+    cacheAvailability(result);
+    applyAvailabilityResult(result);
   } catch (error) {
     console.warn("Availability check failed:", error);
     setStatusKey("unavailable");
@@ -275,6 +335,13 @@ async function checkAvailability() {
 
 function readCsvHeader(response, name) {
   return (response.headers.get(name) || "").split(",").filter(Boolean);
+}
+
+function errorMessageForCode(errorCode) {
+  if (errorCode === "NO_AVAILABLE_SLOT") return t("noSlot");
+  if (errorCode === "UNUSED_AIME") return t("unusedAime");
+  if (errorCode === "INVALID_AIME_CODE") return t("invalidAimeCode");
+  return "";
 }
 
 function resetMobileViewport() {
@@ -360,6 +427,7 @@ scoreForm.addEventListener("submit", async (event) => {
   isBusy = true;
   queryButton.disabled = true;
   clearAvailabilityTimer();
+  clearAvailabilityCache();
   clearScoreImage();
   setStatusKey("working");
 
@@ -378,8 +446,14 @@ scoreForm.addEventListener("submit", async (event) => {
 
     if (!response.ok) {
       const result = await response.json().catch(() => ({}));
-      if (result.errorCode === "NO_AVAILABLE_SLOT") {
-        throw new Error(t("noSlot"));
+      const localMessage = errorMessageForCode(result.errorCode);
+
+      if (localMessage) {
+        if (result.errorCode === "NO_AVAILABLE_SLOT" && result.nextAvailableAt) {
+          scheduleAvailabilityCountdown(result.nextAvailableAt);
+        }
+
+        throw new Error(localMessage);
       }
 
       throw new Error(result.error || t("queryFailed"));

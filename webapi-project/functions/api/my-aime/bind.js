@@ -1,5 +1,6 @@
 import {
   defaultHeaders,
+  classifyAimeError,
   createSessionCookie,
   findErrorMessage,
   fetchMyAimeHome,
@@ -148,6 +149,16 @@ export async function replaceExpiredTimestampSlotWhenFull(cookieJar, home) {
   return expiredSlot;
 }
 
+export async function removeExpiredTimestampSlots(cookieJar, home) {
+  const expiredSlots = findExpiredTimestampSlots(home.slots);
+
+  for (const slot of expiredSlots) {
+    await removeSlotByBlockId(cookieJar, slot);
+  }
+
+  return expiredSlots;
+}
+
 async function bindAimeCardWithSession(env, request, accessCode, session, homeBefore) {
   const alreadyBoundSlot = homeBefore.slots.find((slot) => slotContainsAccessCode(slot, accessCode));
 
@@ -216,6 +227,7 @@ async function bindAimeCardWithSession(env, request, accessCode, session, homeBe
     return {
       ok: false,
       status: 422,
+      errorCode: classifyAimeError(confirmError),
       error: confirmError,
       slots: homeBefore.slots,
     };
@@ -229,6 +241,7 @@ async function bindAimeCardWithSession(env, request, accessCode, session, homeBe
     return {
       ok: false,
       status: fallbackError ? 422 : 502,
+      errorCode: classifyAimeError(fallbackError),
       error: fallbackError || "没有找到绑定确认表单。",
       slots: homeBefore.slots,
     };

@@ -1,4 +1,5 @@
 import { fetchMyAimeHome, getSegaAccounts, json, loginSession, sessionMaxAgeMs } from "./_shared.js";
+import { removeExpiredTimestampSlots } from "./bind.js";
 
 function getQueueState(slots) {
   const emptySlotCount = slots.filter((slot) => !slot.registered).length;
@@ -79,12 +80,20 @@ function mergeQueueStates(states) {
 export async function onRequestGet({ env }) {
   try {
     const states = [];
+    const removedExpiredSlotNos = [];
     let lastAccountError = null;
 
     for (const account of getSegaAccounts(env)) {
       try {
         const { cookieJar, final } = await loginSession(env, account);
-        const home = await fetchMyAimeHome(cookieJar, final);
+        let home = await fetchMyAimeHome(cookieJar, final);
+        const removedExpiredSlots = await removeExpiredTimestampSlots(cookieJar, home);
+
+        if (removedExpiredSlots.length > 0) {
+          removedExpiredSlotNos.push(...removedExpiredSlots.map((slot) => slot.slotNo));
+          home = await fetchMyAimeHome(cookieJar);
+        }
+
         states.push(getQueueState(home.slots));
       } catch (error) {
         lastAccountError = error;
@@ -97,6 +106,7 @@ export async function onRequestGet({ env }) {
 
     return json({
       ok: true,
+      removedExpiredSlotNos,
       ...mergeQueueStates(states),
     });
   } catch (error) {

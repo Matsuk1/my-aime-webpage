@@ -43,7 +43,11 @@ when `SEGA_ACCOUNTS` is not set.
 
 The page calls `GET /api/my-aime/status` on load to check whether a slot is
 available across the SEGA account pool or when the next temporary slot becomes
-replaceable. It calls `POST /api/my-aime/score` to log in server-side, reuse an
+replaceable. The browser caches this availability result for 60 seconds so
+simple refreshes do not keep logging in to SEGA. When the status check does run,
+it removes timestamp-named temporary cards older than 5 minutes.
+
+The page calls `POST /api/my-aime/score` to log in server-side, reuse an
 already-bound card when possible, bind the new card to an empty slot on the
 first available account, or replace the oldest timestamp-named card only when
 that account is full and that card is older than 5 minutes. New temporary cards
