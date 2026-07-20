@@ -4,6 +4,10 @@ Cloudflare Pages project with a static page and Pages Functions. The page accept
 20-digit Aime access code, temporarily binds it to the first empty My Aime slot,
 and then generates a JP maimai score image through JiETNG.
 
+The frontend is installable as a PWA and includes client-side OCR for scanning
+the printed Aime access code from a camera/photo. OCR runs in the browser; the
+selected image is not uploaded to the server.
+
 ## Run
 
 ```bash

@@ -1,0 +1,19 @@
+{
+  "name": "maiscore",
+  "short_name": "maiscore",
+  "description": "Temporary JP maimai score lookup for Aime access codes.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f5f7",
+  "theme_color": "#f5f5f7",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -9,14 +9,18 @@ const scoreResult = document.querySelector("#scoreResult");
 const scoreImage = document.querySelector("#scoreImage");
 const closeDialogButton = document.querySelector("#closeDialogButton");
 const downloadScoreButton = document.querySelector("#downloadScoreButton");
+const scanButton = document.querySelector("#scanButton");
+const ocrInput = document.querySelector("#ocrInput");
 let availabilityTimer = null;
 let scoreImageUrl = "";
 let isBusy = false;
+let isOcrBusy = false;
 let currentLanguage = "zh-Hans";
 let resetViewportTimer = null;
 let dialogCloseTimer = null;
 const availabilityCacheKey = "maiscore-availability-cache";
 const availabilityCacheTtlMs = 60 * 1000;
+const tesseractScriptUrl = "https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js";
 
 const messages = {
   "zh-Hans": {
@@ -24,6 +28,7 @@ const messages = {
     introLine1: "输入 Aime 卡号，",
     introLine2: "生成日服成绩图。",
     accessLabel: "Aime access code",
+    scanButton: "扫描",
     queryButton: "查询",
     scoreTypeLabel: "成绩类型",
     waiting: "等待输入卡号。",
@@ -33,6 +38,11 @@ const messages = {
     ready: "现在可以查询。",
     noSlot: "暂无空位。",
     unavailable: "可直接查询。",
+    ocrUnsupported: "当前浏览器无法读取图片。",
+    ocrLoading: "正在加载扫描组件...",
+    ocrReading: "正在识别卡号...",
+    ocrNoCode: "没有识别到 20 位卡号。",
+    ocrDone: "已识别卡号。",
     invalidCode: "卡号需要是 20 位数字。",
     invalidAimeCode: "卡号不正确。",
     unusedAime: "这张 Aime 还未使用，先在支持的游戏中游玩一次后再试。",
@@ -51,6 +61,7 @@ const messages = {
     introLine1: "Enter your Aime code,",
     introLine2: "get a JP score card.",
     accessLabel: "Aime access code",
+    scanButton: "Scan",
     queryButton: "Get score",
     scoreTypeLabel: "Score type",
     waiting: "Waiting for an Aime code.",
@@ -60,6 +71,11 @@ const messages = {
     ready: "Ready to query.",
     noSlot: "No slot available.",
     unavailable: "Ready.",
+    ocrUnsupported: "This browser cannot read images.",
+    ocrLoading: "Loading scanner...",
+    ocrReading: "Reading card code...",
+    ocrNoCode: "Could not find a 20-digit card code.",
+    ocrDone: "Card code detected.",
     invalidCode: "The card code must be 20 digits.",
     invalidAimeCode: "The Aime code is incorrect.",
     unusedAime: "This Aime has not been used yet. Play a supported game once, then try again.",
@@ -78,6 +94,7 @@ const messages = {
     introLine1: "輸入 Aime 卡號，",
     introLine2: "生成日服成績圖。",
     accessLabel: "Aime access code",
+    scanButton: "掃描",
     queryButton: "查詢",
     scoreTypeLabel: "成績類型",
     waiting: "等待輸入卡號。",
@@ -87,6 +104,11 @@ const messages = {
     ready: "現在可以查詢。",
     noSlot: "暫無空位。",
     unavailable: "可直接查詢。",
+    ocrUnsupported: "目前瀏覽器無法讀取圖片。",
+    ocrLoading: "正在載入掃描元件...",
+    ocrReading: "正在辨識卡號...",
+    ocrNoCode: "沒有辨識到 20 位卡號。",
+    ocrDone: "已辨識卡號。",
     invalidCode: "卡號需要是 20 位數字。",
     invalidAimeCode: "卡號不正確。",
     unusedAime: "這張 Aime 尚未使用，請先在支援的遊戲中遊玩一次後再試。",
@@ -105,6 +127,7 @@ const messages = {
     introLine1: "Aime 카드 번호를 입력하고,",
     introLine2: "일본 서버 성과 이미지를 생성하세요.",
     accessLabel: "Aime access code",
+    scanButton: "스캔",
     queryButton: "조회",
     scoreTypeLabel: "성과 유형",
     waiting: "카드 번호 입력을 기다리는 중입니다.",
@@ -114,6 +137,11 @@ const messages = {
     ready: "지금 조회할 수 있습니다.",
     noSlot: "빈 슬롯 없음.",
     unavailable: "바로 조회 가능.",
+    ocrUnsupported: "현재 브라우저에서 이미지를 읽을 수 없습니다.",
+    ocrLoading: "스캐너를 불러오는 중...",
+    ocrReading: "카드 번호 인식 중...",
+    ocrNoCode: "20자리 카드 번호를 찾지 못했습니다.",
+    ocrDone: "카드 번호를 인식했습니다.",
     invalidCode: "카드 번호는 숫자 20자리여야 합니다.",
     invalidAimeCode: "Aime 카드 번호가 올바르지 않습니다.",
     unusedAime: "이 Aime는 아직 사용되지 않았습니다. 지원 게임을 한 번 플레이한 뒤 다시 시도하세요.",
@@ -223,6 +251,102 @@ function formatAccessCode(value) {
   return normalizeAccessCode(value)
     .slice(0, 20)
     .replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+
+function loadScript(src) {
+  const existing = document.querySelector(`script[src="${src}"]`);
+
+  if (existing) {
+    return new Promise((resolve, reject) => {
+      if (window.Tesseract) {
+        resolve();
+        return;
+      }
+
+      existing.addEventListener("load", resolve, { once: true });
+      existing.addEventListener("error", reject, { once: true });
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.append(script);
+  });
+}
+
+async function imageToOcrCanvas(file) {
+  const bitmap = await createImageBitmap(file);
+  const maxSide = 1600;
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close?.();
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
+    const value = gray > 146 ? 255 : 0;
+    data[index] = value;
+    data[index + 1] = value;
+    data[index + 2] = value;
+  }
+
+  context.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+function extractAccessCode(text) {
+  const compact = text.replace(/\D/g, "");
+  const match = compact.match(/\d{20}/);
+  return match?.[0] || "";
+}
+
+async function recognizeAccessCode(file) {
+  if (!file || !window.createImageBitmap) {
+    throw new Error(t("ocrUnsupported"));
+  }
+
+  setStatusKey("ocrLoading");
+  await loadScript(tesseractScriptUrl);
+
+  if (!window.Tesseract) {
+    throw new Error(t("ocrUnsupported"));
+  }
+
+  setStatusKey("ocrReading");
+  const canvas = await imageToOcrCanvas(file);
+  const worker = window.Tesseract.createWorker();
+
+  await worker.load();
+  await worker.loadLanguage("eng");
+  await worker.initialize("eng");
+  await worker.setParameters({
+    tessedit_char_whitelist: "0123456789 ",
+  });
+
+  try {
+    const result = await worker.recognize(canvas);
+    const accessCode = extractAccessCode(result.data.text || "");
+
+    if (!accessCode) {
+      throw new Error(t("ocrNoCode"));
+    }
+
+    accessCodeInput.value = formatAccessCode(accessCode);
+    setStatusKey("ocrDone");
+  } finally {
+    await worker.terminate();
+  }
 }
 
 function scheduleAvailabilityCountdown(nextAvailableAt) {
@@ -382,6 +506,37 @@ closeDialogButton.addEventListener("click", () => {
   closeScoreDialog();
 });
 
+scanButton.addEventListener("click", () => {
+  if (isBusy || isOcrBusy) {
+    return;
+  }
+
+  ocrInput.click();
+});
+
+ocrInput.addEventListener("change", async () => {
+  const [file] = ocrInput.files || [];
+  ocrInput.value = "";
+
+  if (!file) {
+    return;
+  }
+
+  isOcrBusy = true;
+  scanButton.disabled = true;
+  queryButton.disabled = true;
+
+  try {
+    await recognizeAccessCode(file);
+  } catch (error) {
+    setStatus(error.message || t("ocrNoCode"));
+  } finally {
+    isOcrBusy = false;
+    scanButton.disabled = false;
+    queryButton.disabled = false;
+  }
+});
+
 scoreDialog.addEventListener("click", (event) => {
   if (event.target === scoreDialog) {
     closeScoreDialog();
@@ -426,6 +581,7 @@ scoreForm.addEventListener("submit", async (event) => {
 
   isBusy = true;
   queryButton.disabled = true;
+  scanButton.disabled = true;
   clearAvailabilityTimer();
   clearAvailabilityCache();
   clearScoreImage();
@@ -481,8 +637,17 @@ scoreForm.addEventListener("submit", async (event) => {
   } finally {
     isBusy = false;
     queryButton.disabled = false;
+    scanButton.disabled = false;
   }
 });
 
 applyLanguage(preferredLanguage());
 checkAvailability();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch((error) => {
+      console.warn("Service worker registration failed:", error);
+    });
+  });
+}
