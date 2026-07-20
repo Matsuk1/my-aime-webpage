@@ -1,4 +1,4 @@
-const CACHE_NAME = "maiscore-static-v3";
+const CACHE_NAME = "maiscore-static-v4";
 const STATIC_ASSETS = [
   "./",
   "./index.html",

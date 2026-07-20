@@ -626,13 +626,17 @@ button:focus-visible {
 
 .scanner-frame {
   position: absolute;
-  inset: 9%;
+  top: 50%;
+  left: 50%;
+  width: min(86%, 520px);
+  aspect-ratio: 47 / 8;
   border: 3px solid #ffd60a;
-  border-radius: 14px;
+  border-radius: 10px;
   box-shadow:
     0 0 0 999px rgba(0, 0, 0, 0.18),
     0 0 28px rgba(255, 214, 10, 0.32);
   pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
 @keyframes dialog-in {
@@ -787,8 +791,8 @@ button:focus-visible {
   }
 
   .scanner-frame {
-    inset: 8%;
-    border-radius: 12px;
+    width: 88%;
+    border-radius: 9px;
   }
 }
 

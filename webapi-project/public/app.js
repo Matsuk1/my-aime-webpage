@@ -12,6 +12,7 @@ const downloadScoreButton = document.querySelector("#downloadScoreButton");
 const scanButton = document.querySelector("#scanButton");
 const scannerDialog = document.querySelector("#scannerDialog");
 const scannerVideo = document.querySelector("#scannerVideo");
+const scannerFrame = document.querySelector(".scanner-frame");
 const scannerStatus = document.querySelector("#scannerStatus");
 const closeScannerButton = document.querySelector("#closeScannerButton");
 let availabilityTimer = null;
@@ -365,26 +366,84 @@ function cropFrameToCanvas(frame, region, options = {}) {
   return options.mode === "access-code" ? enhanceAccessCodeCanvas(canvas) : thresholdCanvas(canvas);
 }
 
+function clampRegion(region) {
+  const x = Math.max(0, Math.min(1, region.x));
+  const y = Math.max(0, Math.min(1, region.y));
+  const right = Math.max(x, Math.min(1, region.x + region.width));
+  const bottom = Math.max(y, Math.min(1, region.y + region.height));
+
+  return {
+    x,
+    y,
+    width: Math.max(0.01, right - x),
+    height: Math.max(0.01, bottom - y),
+  };
+}
+
+function expandedRegion(region, paddingX, paddingY) {
+  return clampRegion({
+    x: region.x - paddingX,
+    y: region.y - paddingY,
+    width: region.width + paddingX * 2,
+    height: region.height + paddingY * 2,
+  });
+}
+
+function scannerFrameRegionInVideo() {
+  const videoRect = scannerVideo.getBoundingClientRect();
+  const frameRect = scannerFrame.getBoundingClientRect();
+
+  if (!videoRect.width || !videoRect.height) {
+    return null;
+  }
+
+  const videoAspect = scannerVideo.videoWidth / scannerVideo.videoHeight;
+  const viewAspect = videoRect.width / videoRect.height;
+  let renderedWidth = videoRect.width;
+  let renderedHeight = videoRect.height;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (videoAspect > viewAspect) {
+    renderedWidth = videoRect.height * videoAspect;
+    offsetX = (videoRect.width - renderedWidth) / 2;
+  } else {
+    renderedHeight = videoRect.width / videoAspect;
+    offsetY = (videoRect.height - renderedHeight) / 2;
+  }
+
+  return clampRegion({
+    x: (frameRect.left - videoRect.left - offsetX) / renderedWidth,
+    y: (frameRect.top - videoRect.top - offsetY) / renderedHeight,
+    width: frameRect.width / renderedWidth,
+    height: frameRect.height / renderedHeight,
+  });
+}
+
 function videoFrameToOcrCanvases() {
   if (!scannerVideo.videoWidth || !scannerVideo.videoHeight) {
     return [];
   }
 
-  const sourceWidth = scannerVideo.videoWidth;
-  const sourceHeight = scannerVideo.videoHeight;
-  const cropWidth = Math.min(sourceWidth * 0.86, sourceHeight * 1.58);
-  const cropHeight = cropWidth / 1.58;
   const frame = {
-    x: Math.max(0, (sourceWidth - cropWidth) / 2),
-    y: Math.max(0, (sourceHeight - cropHeight) / 2),
-    width: cropWidth,
-    height: cropHeight,
+    x: 0,
+    y: 0,
+    width: scannerVideo.videoWidth,
+    height: scannerVideo.videoHeight,
   };
+  const frameRegion = scannerFrameRegionInVideo();
+
+  if (!frameRegion) {
+    return [];
+  }
+
+  const tightCodeRegion = expandedRegion(frameRegion, 0.015, 0.08);
+  const widerCodeRegion = expandedRegion(frameRegion, 0.04, 0.18);
 
   return [
-    cropFrameToCanvas(frame, { x: 0.43, y: 0.73, width: 0.54, height: 0.16 }, { mode: "access-code", scale: 3 }),
-    cropFrameToCanvas(frame, { x: 0.38, y: 0.67, width: 0.6, height: 0.25 }, { mode: "access-code", scale: 2.4 }),
-    cropFrameToCanvas(frame, { x: 0.04, y: 0.62, width: 0.94, height: 0.34 }, { scale: 1.6 }),
+    cropFrameToCanvas(frame, tightCodeRegion, { mode: "access-code", scale: 4 }),
+    cropFrameToCanvas(frame, widerCodeRegion, { mode: "access-code", scale: 3 }),
+    cropFrameToCanvas(frame, widerCodeRegion, { scale: 2.2 }),
   ];
 }
 
