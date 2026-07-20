@@ -194,7 +194,7 @@ h1 {
 
 .bind-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto;
   gap: 10px;
 }
 
@@ -274,28 +274,6 @@ button:focus-visible {
   background: var(--blue);
   color: white;
   box-shadow: 0 8px 22px rgba(0, 113, 227, 0.24);
-}
-
-.secondary-button {
-  min-width: 84px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: rgba(255, 255, 255, 0.86);
-  color: var(--text);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.86),
-    0 6px 18px rgba(0, 0, 0, 0.05);
-}
-
-.secondary-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.98);
-  transform: translateY(-1px);
-}
-
-.secondary-button:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, 0.08),
-    0 4px 14px rgba(0, 0, 0, 0.05);
 }
 
 .primary-button:hover:not(:disabled) {
@@ -482,163 +460,6 @@ button:focus-visible {
   max-height: none;
 }
 
-.scanner-dialog {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  max-width: none;
-  height: 100dvh;
-  max-height: none;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  overflow: hidden;
-}
-
-.scanner-dialog:not([open]) {
-  display: none;
-}
-
-.scanner-dialog:focus {
-  outline: none;
-}
-
-.scanner-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(18px) saturate(1.35);
-  opacity: 0;
-  transition: opacity 220ms ease;
-}
-
-.scanner-dialog.is-visible::backdrop {
-  opacity: 1;
-}
-
-.scanner-dialog.is-closing::backdrop {
-  opacity: 0;
-}
-
-.scanner-sheet {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  width: min(100%, 720px);
-  margin: 0 auto;
-  padding: 10px 16px calc(16px + env(safe-area-inset-bottom));
-  border-radius: 22px 22px 0 0;
-  background: rgba(245, 245, 247, 0.96);
-  box-shadow: 0 -22px 70px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(24px) saturate(1.45);
-  transform: translateY(104%);
-  transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  will-change: transform;
-}
-
-.scanner-dialog.is-entering .scanner-sheet {
-  transform: translateY(104%);
-}
-
-.scanner-dialog.is-visible .scanner-sheet {
-  transform: translateY(0);
-}
-
-.scanner-dialog.is-closing .scanner-sheet {
-  transform: translateY(104%);
-  transition-duration: 220ms;
-  transition-timing-function: ease-in;
-}
-
-.scanner-handle {
-  width: 42px;
-  height: 5px;
-  margin: 0 auto 14px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.18);
-}
-
-.scanner-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 12px;
-}
-
-.scanner-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.scanner-status {
-  margin: 5px 0 0;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.35;
-}
-
-.scanner-close {
-  display: inline-grid;
-  width: 52px;
-  min-width: 52px;
-  height: 36px;
-  min-height: 36px;
-  place-items: center;
-  border: 0;
-  border-radius: 999px;
-  padding: 0;
-  background: rgba(255, 255, 255, 0.86);
-  color: var(--text);
-  font-size: 22px;
-  font-weight: 650;
-  line-height: 1;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.78),
-    0 8px 22px rgba(0, 0, 0, 0.1);
-}
-
-.scanner-close:active {
-  transform: scale(0.94);
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, 0.12),
-    0 4px 14px rgba(0, 0, 0, 0.1);
-}
-
-.scanner-view {
-  position: relative;
-  overflow: hidden;
-  aspect-ratio: 1.58;
-  border-radius: 14px;
-  background: #0b0b0c;
-}
-
-.scanner-view video {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.scanner-frame {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: min(86%, 520px);
-  aspect-ratio: 47 / 8;
-  border: 3px solid #ffd60a;
-  border-radius: 10px;
-  box-shadow:
-    0 0 0 999px rgba(0, 0, 0, 0.18),
-    0 0 28px rgba(255, 214, 10, 0.32);
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-}
-
 @keyframes dialog-in {
   from {
     opacity: 0;
@@ -749,15 +570,10 @@ button:focus-visible {
   }
 
   .bind-row {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
-  .bind-row input {
-    grid-column: 1 / -1;
-  }
-
-  .primary-button,
-  .secondary-button {
+  .primary-button {
     width: 100%;
   }
 
@@ -780,20 +596,6 @@ button:focus-visible {
     height: 36px;
   }
 
-  .scanner-sheet {
-    width: 100%;
-    padding: 9px 12px calc(12px + env(safe-area-inset-bottom));
-    border-radius: 20px 20px 0 0;
-  }
-
-  .scanner-view {
-    border-radius: 12px;
-  }
-
-  .scanner-frame {
-    width: 88%;
-    border-radius: 9px;
-  }
 }
 
 @media (max-width: 420px) {

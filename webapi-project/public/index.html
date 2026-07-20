@@ -56,9 +56,6 @@
                 maxlength="24"
                 placeholder="0000 0000 0000 0000 0000"
               />
-              <button id="scanButton" class="secondary-button" type="button">
-                <span data-i18n="scanButton">扫描</span>
-              </button>
               <button id="queryButton" class="primary-button" type="submit">
                 <span data-i18n="queryButton">查询</span>
               </button>
@@ -93,23 +90,6 @@
       <p data-i18n="footerCopyright">© 2026 maiscore. SEGA、Aime、maimai 为各自权利方商标；本项目与 SEGA 无关联。</p>
     </footer>
 
-    <dialog id="scannerDialog" class="scanner-dialog" aria-label="Scan Aime card" tabindex="-1">
-      <div class="scanner-sheet">
-        <div class="scanner-handle" aria-hidden="true"></div>
-        <div class="scanner-head">
-          <div>
-            <p class="scanner-title" data-i18n="scannerTitle">扫描 Aime</p>
-            <p id="scannerStatus" class="scanner-status" data-scanner-status-key="scannerReady">对准卡号。</p>
-          </div>
-          <button id="closeScannerButton" class="scanner-close" type="button" aria-label="Close">×</button>
-        </div>
-        <div class="scanner-view">
-          <video id="scannerVideo" autoplay muted playsinline></video>
-          <div class="scanner-frame" aria-hidden="true"></div>
-        </div>
-      </div>
-    </dialog>
-
     <dialog id="scoreDialog" class="score-dialog" aria-label="Score image" tabindex="-1">
       <div class="dialog-toolbar">
         <button id="closeDialogButton" class="dialog-button dialog-button--close" type="button" aria-label="Close">
@@ -124,6 +104,6 @@
       </figure>
     </dialog>
 
-    <script type="module" src="./app.js"></script>
+    <script src="./app.js"></script>
   </body>
 </html>

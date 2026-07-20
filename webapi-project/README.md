@@ -4,9 +4,8 @@ Cloudflare Pages project with a static page and Pages Functions. The page accept
 20-digit Aime access code, temporarily binds it to the first empty My Aime slot,
 and then generates a JP maimai score image through JiETNG.
 
-The frontend is installable as a PWA and includes client-side OCR for scanning
-the printed Aime access code from a camera/photo. OCR runs in the browser; the
-selected image is not uploaded to the server.
+The frontend is installable as a PWA and accepts the Aime access code by manual
+input.
 
 ## Run
 
@@ -15,8 +14,7 @@ npm install
 npm run dev
 ```
 
-Then open the local URL printed by Wrangler. The dev command builds the Vite
-frontend into `dist` before starting Pages Functions.
+Then open the local URL printed by Wrangler.
 
 ## Environment
 
@@ -69,9 +67,7 @@ The repository includes `.github/workflows/deploy-pages.yml`. It deploys this
 project to Cloudflare Pages when `main` is pushed, using:
 
 ```bash
-npm ci
-npm run build
-wrangler pages deploy dist --project-name=my-aime-webpage
+wrangler pages deploy public --project-name=my-aime-webpage
 ```
 
 Configure these GitHub repository secrets:

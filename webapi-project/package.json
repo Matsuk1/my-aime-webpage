@@ -4,16 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build",
-    "dev": "npm run build && wrangler pages dev dist",
-    "dev:ui": "vite --host 127.0.0.1",
-    "deploy": "wrangler pages deploy dist"
+    "dev": "wrangler pages dev public",
+    "deploy": "wrangler pages deploy public"
   },
   "devDependencies": {
-    "vite": "^8.1.5",
     "wrangler": "^4.25.0"
-  },
-  "dependencies": {
-    "@paddleocr/paddleocr-js": "^0.4.2"
   }
 }
