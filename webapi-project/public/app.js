@@ -22,6 +22,7 @@ let currentLanguage = "zh-Hans";
 let resetViewportTimer = null;
 let dialogCloseTimer = null;
 let scannerCloseTimer = null;
+let scannerOpenTimer = null;
 let scannerStream = null;
 let scannerTimer = null;
 let scannerWorkerPromise = null;
@@ -432,16 +433,20 @@ async function startScanner() {
   }
 
   clearTimeout(scannerCloseTimer);
-  scannerDialog.classList.remove("is-closing");
-  scannerDialog.classList.add("is-opening");
+  clearTimeout(scannerOpenTimer);
+  scannerDialog.classList.remove("is-closing", "is-visible");
+  scannerDialog.classList.add("is-entering");
 
   if (!scannerDialog.open) {
     scannerDialog.showModal();
   }
 
-  requestAnimationFrame(() => {
-    scannerDialog.classList.remove("is-opening");
-  });
+  // Force the off-screen state to paint before moving the sheet into view.
+  scannerDialog.offsetHeight;
+  scannerOpenTimer = setTimeout(() => {
+    scannerDialog.classList.remove("is-entering");
+    scannerDialog.classList.add("is-visible");
+  }, 40);
 
   isOcrBusy = true;
   scanButton.disabled = true;
@@ -499,6 +504,8 @@ function stopScanner(options = {}) {
   }
 
   clearTimeout(scannerCloseTimer);
+  clearTimeout(scannerOpenTimer);
+  scannerDialog.classList.remove("is-visible", "is-entering");
   scannerDialog.classList.add("is-closing");
   scannerCloseTimer = setTimeout(() => {
     scannerDialog.classList.remove("is-closing");

@@ -508,11 +508,16 @@ button:focus-visible {
 .scanner-dialog::backdrop {
   background: rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(18px) saturate(1.35);
-  animation: backdrop-in 200ms ease-out both;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.scanner-dialog.is-visible::backdrop {
+  opacity: 1;
 }
 
 .scanner-dialog.is-closing::backdrop {
-  animation: backdrop-out 200ms ease-in both;
+  opacity: 0;
 }
 
 .scanner-sheet {
@@ -527,17 +532,23 @@ button:focus-visible {
   background: rgba(245, 245, 247, 0.96);
   box-shadow: 0 -22px 70px rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(24px) saturate(1.45);
-  animation: scanner-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform: translateY(104%);
+  transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
   will-change: transform;
 }
 
-.scanner-dialog.is-opening .scanner-sheet {
-  animation: none;
-  transform: translateY(100%);
+.scanner-dialog.is-entering .scanner-sheet {
+  transform: translateY(104%);
+}
+
+.scanner-dialog.is-visible .scanner-sheet {
+  transform: translateY(0);
 }
 
 .scanner-dialog.is-closing .scanner-sheet {
-  animation: scanner-out 200ms ease-in both;
+  transform: translateY(104%);
+  transition-duration: 220ms;
+  transition-timing-function: ease-in;
 }
 
 .scanner-handle {
@@ -665,26 +676,6 @@ button:focus-visible {
 
   to {
     opacity: 0;
-  }
-}
-
-@keyframes scanner-in {
-  from {
-    transform: translateY(100%);
-  }
-
-  to {
-    transform: translateY(0);
-  }
-}
-
-@keyframes scanner-out {
-  from {
-    transform: translateY(0);
-  }
-
-  to {
-    transform: translateY(100%);
   }
 }
 
