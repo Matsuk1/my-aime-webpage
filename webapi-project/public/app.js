@@ -325,12 +325,21 @@ async function recognizeAccessCode(file) {
 
   setStatusKey("ocrReading");
   const canvas = await imageToOcrCanvas(file);
-  const worker = window.Tesseract.createWorker();
+  const worker = await window.Tesseract.createWorker();
 
-  await worker.load();
-  await worker.loadLanguage("eng");
-  await worker.initialize("eng");
-  await worker.setParameters({
+  if (typeof worker.load === "function") {
+    await worker.load();
+  }
+
+  if (typeof worker.loadLanguage === "function") {
+    await worker.loadLanguage("eng");
+  }
+
+  if (typeof worker.initialize === "function") {
+    await worker.initialize("eng");
+  }
+
+  await worker.setParameters?.({
     tessedit_char_whitelist: "0123456789 ",
   });
 
@@ -345,7 +354,7 @@ async function recognizeAccessCode(file) {
     accessCodeInput.value = formatAccessCode(accessCode);
     setStatusKey("ocrDone");
   } finally {
-    await worker.terminate();
+    await worker.terminate?.();
   }
 }
 
