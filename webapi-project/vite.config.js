@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import { copyFileSync } from "node:fs";
+import { copyFileSync, readdirSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 
 export default defineConfig({
@@ -9,6 +9,13 @@ export default defineConfig({
     {
       name: "copy-service-worker",
       closeBundle() {
+        const assetsDir = resolve("dist/assets");
+        for (const file of readdirSync(assetsDir)) {
+          if (file.startsWith("ort-wasm") && file.endsWith(".wasm")) {
+            rmSync(resolve(assetsDir, file));
+          }
+        }
+
         copyFileSync(resolve("public/sw.js"), resolve("dist/sw.js"));
       },
     },
