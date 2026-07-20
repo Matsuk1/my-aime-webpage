@@ -10,7 +10,10 @@ const scoreImage = document.querySelector("#scoreImage");
 const closeDialogButton = document.querySelector("#closeDialogButton");
 const downloadScoreButton = document.querySelector("#downloadScoreButton");
 const scanButton = document.querySelector("#scanButton");
-const ocrInput = document.querySelector("#ocrInput");
+const scannerDialog = document.querySelector("#scannerDialog");
+const scannerVideo = document.querySelector("#scannerVideo");
+const scannerStatus = document.querySelector("#scannerStatus");
+const closeScannerButton = document.querySelector("#closeScannerButton");
 let availabilityTimer = null;
 let scoreImageUrl = "";
 let isBusy = false;
@@ -18,8 +21,13 @@ let isOcrBusy = false;
 let currentLanguage = "zh-Hans";
 let resetViewportTimer = null;
 let dialogCloseTimer = null;
+let scannerCloseTimer = null;
+let scannerStream = null;
+let scannerTimer = null;
+let scannerWorkerPromise = null;
 const availabilityCacheKey = "maiscore-availability-cache";
 const availabilityCacheTtlMs = 60 * 1000;
+const scannerIntervalMs = 1600;
 const tesseractScriptUrl = "https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js";
 
 const messages = {
@@ -31,6 +39,10 @@ const messages = {
     scanButton: "扫描",
     queryButton: "查询",
     scoreTypeLabel: "成绩类型",
+    scannerTitle: "扫描 Aime",
+    scannerReady: "对准卡号。",
+    scannerCameraFailed: "无法打开相机。",
+    scannerPermissionDenied: "请允许相机权限。",
     waiting: "等待输入卡号。",
     queueCountdown: (seconds) => `等待 ${seconds}s。`,
     checking: "检查中...",
@@ -64,6 +76,10 @@ const messages = {
     scanButton: "Scan",
     queryButton: "Get score",
     scoreTypeLabel: "Score type",
+    scannerTitle: "Scan Aime",
+    scannerReady: "Align the code.",
+    scannerCameraFailed: "Could not open camera.",
+    scannerPermissionDenied: "Please allow camera access.",
     waiting: "Waiting for an Aime code.",
     queueCountdown: (seconds) => `Wait ${seconds}s.`,
     checking: "Checking...",
@@ -97,6 +113,10 @@ const messages = {
     scanButton: "掃描",
     queryButton: "查詢",
     scoreTypeLabel: "成績類型",
+    scannerTitle: "掃描 Aime",
+    scannerReady: "對準卡號。",
+    scannerCameraFailed: "無法開啟相機。",
+    scannerPermissionDenied: "請允許相機權限。",
     waiting: "等待輸入卡號。",
     queueCountdown: (seconds) => `等待 ${seconds}s。`,
     checking: "檢查中...",
@@ -130,6 +150,10 @@ const messages = {
     scanButton: "스캔",
     queryButton: "조회",
     scoreTypeLabel: "성과 유형",
+    scannerTitle: "Aime 스캔",
+    scannerReady: "카드 번호를 맞춰 주세요.",
+    scannerCameraFailed: "카메라를 열 수 없습니다.",
+    scannerPermissionDenied: "카메라 권한을 허용해 주세요.",
     waiting: "카드 번호 입력을 기다리는 중입니다.",
     queueCountdown: (seconds) => `${seconds}초 대기.`,
     checking: "확인 중...",
@@ -172,6 +196,11 @@ function setStatusKey(key, ...args) {
   setStatus(t(key, ...args));
 }
 
+function setScannerStatusKey(key) {
+  scannerStatus.dataset.scannerStatusKey = key;
+  scannerStatus.textContent = t(key);
+}
+
 function applyLanguage(language) {
   currentLanguage = messages[language] ? language : "zh-Hans";
   document.documentElement.lang = currentLanguage;
@@ -183,6 +212,11 @@ function applyLanguage(language) {
 
   closeDialogButton.setAttribute("aria-label", t("closeDialog"));
   downloadScoreButton.setAttribute("aria-label", t("downloadScore"));
+  closeScannerButton.setAttribute("aria-label", t("closeDialog"));
+
+  if (scannerStatus.dataset.scannerStatusKey) {
+    scannerStatus.textContent = t(scannerStatus.dataset.scannerStatusKey);
+  }
 
   if (statusText.dataset.statusKey) {
     const args = JSON.parse(statusText.dataset.statusArgs || "[]");
@@ -278,18 +312,8 @@ function loadScript(src) {
   });
 }
 
-async function imageToOcrCanvas(file) {
-  const bitmap = await createImageBitmap(file);
-  const maxSide = 1600;
-  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-
+function thresholdCanvas(canvas) {
   const context = canvas.getContext("2d", { willReadFrequently: true });
-  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close?.();
-
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data;
 
@@ -305,26 +329,36 @@ async function imageToOcrCanvas(file) {
   return canvas;
 }
 
-function extractAccessCode(text) {
-  const compact = text.replace(/\D/g, "");
-  const match = compact.match(/\d{20}/);
-  return match?.[0] || "";
-}
-
-async function recognizeAccessCode(file) {
-  if (!file || !window.createImageBitmap) {
-    throw new Error(t("ocrUnsupported"));
+function videoFrameToOcrCanvas() {
+  if (!scannerVideo.videoWidth || !scannerVideo.videoHeight) {
+    return null;
   }
 
-  setStatusKey("ocrLoading");
+  const sourceWidth = scannerVideo.videoWidth;
+  const sourceHeight = scannerVideo.videoHeight;
+  const cropWidth = Math.min(sourceWidth * 0.86, sourceHeight * 1.58);
+  const cropHeight = cropWidth / 1.58;
+  const sourceX = Math.max(0, (sourceWidth - cropWidth) / 2);
+  const sourceY = Math.max(0, (sourceHeight - cropHeight) / 2);
+  const maxSide = 1300;
+  const scale = Math.min(1, maxSide / Math.max(cropWidth, cropHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(cropWidth * scale));
+  canvas.height = Math.max(1, Math.round(cropHeight * scale));
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(scannerVideo, sourceX, sourceY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+
+  return thresholdCanvas(canvas);
+}
+
+async function createOcrWorker() {
   await loadScript(tesseractScriptUrl);
 
   if (!window.Tesseract) {
     throw new Error(t("ocrUnsupported"));
   }
 
-  setStatusKey("ocrReading");
-  const canvas = await imageToOcrCanvas(file);
   const worker = await window.Tesseract.createWorker();
 
   if (typeof worker.load === "function") {
@@ -343,19 +377,129 @@ async function recognizeAccessCode(file) {
     tessedit_char_whitelist: "0123456789 ",
   });
 
+  return worker;
+}
+
+function ensureOcrWorker() {
+  scannerWorkerPromise ||= createOcrWorker();
+  return scannerWorkerPromise;
+}
+
+function extractAccessCode(text) {
+  const compact = text.replace(/\D/g, "");
+  const match = compact.match(/\d{20}/);
+  return match?.[0] || "";
+}
+
+async function scanVideoFrame() {
+  if (!scannerDialog.open || isOcrBusy) {
+    return;
+  }
+
+  const canvas = videoFrameToOcrCanvas();
+
+  if (!canvas) {
+    return;
+  }
+
+  isOcrBusy = true;
+  setScannerStatusKey("ocrReading");
+
   try {
+    const worker = await ensureOcrWorker();
     const result = await worker.recognize(canvas);
     const accessCode = extractAccessCode(result.data.text || "");
 
-    if (!accessCode) {
-      throw new Error(t("ocrNoCode"));
+    if (accessCode) {
+      accessCodeInput.value = formatAccessCode(accessCode);
+      setStatusKey("ocrDone");
+      setScannerStatusKey("ocrDone");
+      stopScanner({ close: true });
+      return;
     }
 
-    accessCodeInput.value = formatAccessCode(accessCode);
-    setStatusKey("ocrDone");
+    setScannerStatusKey("scannerReady");
+  } catch (error) {
+    scannerStatus.textContent = error.message || t("ocrNoCode");
   } finally {
-    await worker.terminate?.();
+    isOcrBusy = false;
   }
+}
+
+async function startScanner() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error(t("ocrUnsupported"));
+  }
+
+  clearTimeout(scannerCloseTimer);
+  scannerDialog.classList.remove("is-closing");
+
+  if (!scannerDialog.open) {
+    scannerDialog.showModal();
+  }
+
+  isOcrBusy = true;
+  scanButton.disabled = true;
+  queryButton.disabled = true;
+  setScannerStatusKey("ocrLoading");
+
+  try {
+    scannerStream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      },
+    });
+
+    scannerVideo.srcObject = scannerStream;
+    await scannerVideo.play();
+    await ensureOcrWorker();
+
+    isOcrBusy = false;
+    setScannerStatusKey("scannerReady");
+    clearInterval(scannerTimer);
+    scannerTimer = setInterval(scanVideoFrame, scannerIntervalMs);
+    scanVideoFrame();
+  } catch (error) {
+    isOcrBusy = false;
+    scannerStatus.textContent =
+      error.name === "NotAllowedError" || error.name === "PermissionDeniedError"
+        ? t("scannerPermissionDenied")
+        : error.message || t("scannerCameraFailed");
+    stopScanner({ close: false });
+  }
+}
+
+function stopScanner(options = {}) {
+  clearInterval(scannerTimer);
+  scannerTimer = null;
+
+  if (scannerStream) {
+    for (const track of scannerStream.getTracks()) {
+      track.stop();
+    }
+  }
+
+  scannerStream = null;
+  scannerVideo.pause();
+  scannerVideo.srcObject = null;
+  isOcrBusy = false;
+  scanButton.disabled = isBusy;
+  queryButton.disabled = isBusy;
+
+  if (!options.close || !scannerDialog.open) {
+    return;
+  }
+
+  clearTimeout(scannerCloseTimer);
+  scannerDialog.classList.add("is-closing");
+  scannerCloseTimer = setTimeout(() => {
+    scannerDialog.classList.remove("is-closing");
+    scannerDialog.close();
+    setScannerStatusKey("scannerReady");
+  }, 200);
 }
 
 function scheduleAvailabilityCountdown(nextAvailableAt) {
@@ -520,30 +664,24 @@ scanButton.addEventListener("click", () => {
     return;
   }
 
-  ocrInput.click();
+  startScanner().catch((error) => {
+    setStatus(error.message || t("ocrUnsupported"));
+  });
 });
 
-ocrInput.addEventListener("change", async () => {
-  const [file] = ocrInput.files || [];
-  ocrInput.value = "";
+closeScannerButton.addEventListener("click", () => {
+  stopScanner({ close: true });
+});
 
-  if (!file) {
-    return;
+scannerDialog.addEventListener("click", (event) => {
+  if (event.target === scannerDialog) {
+    stopScanner({ close: true });
   }
+});
 
-  isOcrBusy = true;
-  scanButton.disabled = true;
-  queryButton.disabled = true;
-
-  try {
-    await recognizeAccessCode(file);
-  } catch (error) {
-    setStatus(error.message || t("ocrNoCode"));
-  } finally {
-    isOcrBusy = false;
-    scanButton.disabled = false;
-    queryButton.disabled = false;
-  }
+scannerDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  stopScanner({ close: true });
 });
 
 scoreDialog.addEventListener("click", (event) => {
