@@ -15,6 +15,62 @@ const sessionCookieName = "my_aime_session";
 const sessionMaxAgeSeconds = 300;
 export const sessionMaxAgeMs = sessionMaxAgeSeconds * 1000;
 
+function normalizeAccount(rawAccount, index) {
+  const segaId = rawAccount?.id || rawAccount?.segaId || rawAccount?.segaid || rawAccount?.SEGA_ID;
+  const segaPassword =
+    rawAccount?.password || rawAccount?.pwd || rawAccount?.segapwd || rawAccount?.segaPassword || rawAccount?.SEGA_PASSWORD;
+
+  if (!segaId || !segaPassword) {
+    return null;
+  }
+
+  return {
+    index,
+    label: rawAccount?.label || rawAccount?.name || `account-${index + 1}`,
+    segaId,
+    segaPassword,
+  };
+}
+
+export function getSegaAccounts(env) {
+  if (env.SEGA_ACCOUNTS) {
+    let parsedAccounts;
+
+    try {
+      parsedAccounts = JSON.parse(env.SEGA_ACCOUNTS);
+    } catch {
+      throw new Error("SEGA_ACCOUNTS must be a JSON array.");
+    }
+
+    if (!Array.isArray(parsedAccounts)) {
+      throw new Error("SEGA_ACCOUNTS must be a JSON array.");
+    }
+
+    const accounts = parsedAccounts
+      .map((account, index) => normalizeAccount(account, index))
+      .filter(Boolean);
+
+    if (accounts.length > 0) {
+      return accounts;
+    }
+  }
+
+  const fallbackAccount = normalizeAccount(
+    {
+      segaId: env.SEGA_ID || env.segaid,
+      segaPassword: env.SEGA_PASSWORD || env.segapwd,
+      label: "default",
+    },
+    0,
+  );
+
+  if (!fallbackAccount) {
+    throw new Error("Missing SEGA_ACCOUNTS or SEGA_ID/SEGA_PASSWORD environment variables.");
+  }
+
+  return [fallbackAccount];
+}
+
 export function json(data, status = 200, headers = {}) {
   return Response.json(data, {
     status,
@@ -294,13 +350,8 @@ export async function followRedirects(startUrl, cookieJar, maxRedirects = 8) {
   return { response, finalUrl: currentUrl };
 }
 
-export async function loginSession(env) {
-  const segaId = env.SEGA_ID || env.segaid;
-  const segaPassword = env.SEGA_PASSWORD || env.segapwd;
-
-  if (!segaId || !segaPassword) {
-    throw new Error("Missing SEGA_ID or SEGA_PASSWORD environment variables.");
-  }
+export async function loginSession(env, account = null) {
+  const loginAccount = account || getSegaAccounts(env)[0];
 
   const cookieJar = new Map();
 
@@ -329,8 +380,8 @@ export async function loginSession(env) {
       },
       body: new URLSearchParams({
         retention: "0",
-        sid: segaId,
-        password: segaPassword,
+        sid: loginAccount.segaId,
+        password: loginAccount.segaPassword,
       }),
     },
     cookieJar,
@@ -344,6 +395,7 @@ export async function loginSession(env) {
   return {
     cookieJar,
     final,
+    account: loginAccount,
   };
 }
 

@@ -5,6 +5,7 @@ import {
   fetchMyAimeHome,
   fetchWithCookies,
   followRedirects,
+  getSegaAccounts,
   json,
   loginSession,
   parseFirstForm,
@@ -122,6 +123,16 @@ function findExpiredTimestampSlots(slots) {
     .sort((a, b) => a.aliasTimestamp - b.aliasTimestamp);
 }
 
+function nextTemporarySlotAvailableAt(slots) {
+  const activeTemporarySlots = slots
+    .filter((slot) => slot.registered && slot.aliasTimestamp)
+    .map((slot) => slot.aliasTimestamp + sessionMaxAgeMs)
+    .filter((expiresAtMs) => expiresAtMs > Date.now())
+    .sort((a, b) => a - b);
+
+  return activeTemporarySlots[0] || null;
+}
+
 export async function replaceExpiredTimestampSlotWhenFull(cookieJar, home) {
   if (home.slots.some((slot) => !slot.registered)) {
     return null;
@@ -137,25 +148,14 @@ export async function replaceExpiredTimestampSlotWhenFull(cookieJar, home) {
   return expiredSlot;
 }
 
-export async function bindAimeCard(env, request, accessCode) {
-  const normalizedAccessCode = normalizeAccessCode(accessCode);
-
-  if (!/^\d{20}$/.test(normalizedAccessCode)) {
-    return {
-      ok: false,
-      status: 400,
-      error: "卡号需要是 20 位数字。",
-    };
-  }
-
-  const { cookieJar, final } = await loginSession(env);
-  let homeBefore = await fetchMyAimeHome(cookieJar, final);
-  const alreadyBoundSlot = homeBefore.slots.find((slot) => slotContainsAccessCode(slot, normalizedAccessCode));
+async function bindAimeCardWithSession(env, request, accessCode, session, homeBefore) {
+  const alreadyBoundSlot = homeBefore.slots.find((slot) => slotContainsAccessCode(slot, accessCode));
 
   if (alreadyBoundSlot) {
     return {
       ok: true,
       status: 200,
+      account: session.account,
       boundSlotNo: alreadyBoundSlot.slotNo,
       alreadyBound: true,
       removedExpiredSlotNos: [],
@@ -167,22 +167,16 @@ export async function bindAimeCard(env, request, accessCode) {
   let emptySlot = homeBefore.slots.find((slot) => !slot.registered);
 
   if (!emptySlot) {
-    replacedExpiredSlot = await replaceExpiredTimestampSlotWhenFull(cookieJar, homeBefore);
+    replacedExpiredSlot = await replaceExpiredTimestampSlotWhenFull(session.cookieJar, homeBefore);
   }
 
   if (replacedExpiredSlot) {
-    homeBefore = await fetchMyAimeHome(cookieJar);
+    homeBefore = await fetchMyAimeHome(session.cookieJar);
     emptySlot = homeBefore.slots.find((slot) => !slot.registered);
   }
 
   if (!emptySlot) {
-    return {
-      ok: false,
-      status: 409,
-      errorCode: "NO_AVAILABLE_SLOT",
-      error: "没有可绑定的空卡槽。",
-      slots: homeBefore.slots,
-    };
+    return null;
   }
 
   const slotIndex = emptySlot.slotNo - 1;
@@ -193,7 +187,7 @@ export async function bindAimeCard(env, request, accessCode) {
       method: "GET",
       headers: defaultHeaders,
     },
-    cookieJar,
+    session.cookieJar,
   );
   const inputHtml = await inputResponse.text();
   const inputForm = parseFirstForm(inputHtml);
@@ -204,16 +198,16 @@ export async function bindAimeCard(env, request, accessCode) {
     confirmUrl,
     formBodyFromInputs(inputForm.inputs, {
       slotNo: String(slotIndex),
-      accessCode: normalizedAccessCode,
+      accessCode,
       comment: aliasTimestamp,
       regist: "",
     }),
     inputUrl,
-    cookieJar,
+    session.cookieJar,
   );
   const confirmRedirect = resolveLocation(confirmResponse.headers.get("location"), confirmUrl);
   const confirmFinal = confirmRedirect
-    ? await followRedirects(confirmRedirect, cookieJar)
+    ? await followRedirects(confirmRedirect, session.cookieJar)
     : { response: confirmResponse, finalUrl: confirmUrl };
   const confirmHtml = await confirmFinal.response.text();
   const confirmError = findErrorMessage(confirmHtml);
@@ -245,37 +239,104 @@ export async function bindAimeCard(env, request, accessCode) {
     doneUrl,
     formBodyFromInputs(confirmForm.inputs, {
       slotNo: String(slotIndex),
-      accessCode: normalizedAccessCode,
+      accessCode,
       comment: aliasTimestamp,
       regist: "",
     }),
     confirmFinal.finalUrl,
-    cookieJar,
+    session.cookieJar,
   );
 
   const doneRedirect = resolveLocation(doneResponse.headers.get("location"), doneUrl);
   if (doneRedirect) {
-    await followRedirects(doneRedirect, cookieJar);
+    await followRedirects(doneRedirect, session.cookieJar);
   } else {
     await doneResponse.text();
   }
 
-  const homeAfter = await fetchMyAimeHome(cookieJar);
-  const session = await createSessionCookie(env, request, cookieJar);
+  const homeAfter = await fetchMyAimeHome(session.cookieJar);
+  const createdSession = await createSessionCookie(env, request, session.cookieJar);
 
   return {
     ok: true,
     status: doneResponse.status,
+    account: session.account,
     boundSlotNo: emptySlot.slotNo,
     alreadyBound: false,
     aliasTimestamp,
     removedExpiredSlotNos: replacedExpiredSlot ? [replacedExpiredSlot.slotNo] : [],
     session: {
-      expiresAt: session.expiresAt,
-      maxAgeSeconds: session.maxAgeSeconds,
+      expiresAt: createdSession.expiresAt,
+      maxAgeSeconds: createdSession.maxAgeSeconds,
     },
-    sessionCookie: session.header,
+    sessionCookie: createdSession.header,
     slots: homeAfter.slots,
+  };
+}
+
+export async function bindAimeCard(env, request, accessCode) {
+  const normalizedAccessCode = normalizeAccessCode(accessCode);
+
+  if (!/^\d{20}$/.test(normalizedAccessCode)) {
+    return {
+      ok: false,
+      status: 400,
+      error: "卡号需要是 20 位数字。",
+    };
+  }
+
+  const accounts = getSegaAccounts(env);
+  let nextAvailableAtMs = null;
+  let lastSlots = [];
+  let checkedAccountCount = 0;
+  let lastAccountError = null;
+
+  for (const account of accounts) {
+    let session;
+    let homeBefore;
+
+    try {
+      session = await loginSession(env, account);
+      homeBefore = await fetchMyAimeHome(session.cookieJar, session.final);
+    } catch (error) {
+      lastAccountError = error;
+      continue;
+    }
+
+    checkedAccountCount += 1;
+
+    let result;
+
+    try {
+      result = await bindAimeCardWithSession(env, request, normalizedAccessCode, session, homeBefore);
+    } catch (error) {
+      lastAccountError = error;
+      continue;
+    }
+
+    if (result) {
+      return result;
+    }
+
+    lastSlots = homeBefore.slots;
+    const accountNextAvailableAtMs = nextTemporarySlotAvailableAt(homeBefore.slots);
+
+    if (accountNextAvailableAtMs && (!nextAvailableAtMs || accountNextAvailableAtMs < nextAvailableAtMs)) {
+      nextAvailableAtMs = accountNextAvailableAtMs;
+    }
+  }
+
+  if (checkedAccountCount === 0 && lastAccountError) {
+    throw lastAccountError;
+  }
+
+  return {
+    ok: false,
+    status: 409,
+    errorCode: "NO_AVAILABLE_SLOT",
+    error: "没有可绑定的空卡槽。",
+    nextAvailableAt: nextAvailableAtMs ? new Date(nextAvailableAtMs).toISOString() : null,
+    slots: lastSlots,
   };
 }
 
@@ -283,7 +344,7 @@ export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json().catch(() => ({}));
     const result = await bindAimeCard(env, request, body.accessCode);
-    const { sessionCookie, ...responseBody } = result;
+    const { account, sessionCookie, ...responseBody } = result;
     const headers = sessionCookie ? { "Set-Cookie": sessionCookie } : {};
 
     return json(responseBody, result.ok ? 200 : result.status || 500, headers);

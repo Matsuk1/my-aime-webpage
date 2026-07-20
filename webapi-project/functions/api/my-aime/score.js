@@ -15,10 +15,6 @@ const validCommandTypes = new Set([
   "sun50",
 ]);
 
-function getCredential(env, upperName, lowerName) {
-  return env[upperName] || env[lowerName];
-}
-
 function normalizeCommandType(value) {
   return validCommandTypes.has(value) ? value : "best50";
 }
@@ -41,12 +37,12 @@ function jietngError(message, status) {
   return error;
 }
 
-async function queryJietngScore(env, options) {
-  const segaId = getCredential(env, "SEGA_ID", "segaid");
-  const segaPassword = getCredential(env, "SEGA_PASSWORD", "segapwd");
+async function queryJietngScore(options) {
+  const segaId = options.account?.segaId;
+  const segaPassword = options.account?.segaPassword;
 
   if (!segaId || !segaPassword) {
-    throw new Error("Missing SEGA_ID or SEGA_PASSWORD environment variables.");
+    throw new Error("Missing SEGA account credentials.");
   }
 
   const form = new FormData();
@@ -88,7 +84,8 @@ export async function onRequestPost({ request, env }) {
     let imageBuffer;
 
     try {
-      imageBuffer = await queryJietngScore(env, {
+      imageBuffer = await queryJietngScore({
+        account: bindResult.account,
         aimeIndex: bindResult.boundSlotNo - 1,
         timezone: body.timezone,
         cmdType: body.cmdType,

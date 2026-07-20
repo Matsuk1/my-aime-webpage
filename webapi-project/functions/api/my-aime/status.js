@@ -1,4 +1,4 @@
-import { fetchMyAimeHome, json, loginSession, sessionMaxAgeMs } from "./_shared.js";
+import { fetchMyAimeHome, getSegaAccounts, json, loginSession, sessionMaxAgeMs } from "./_shared.js";
 
 function getQueueState(slots) {
   const emptySlotCount = slots.filter((slot) => !slot.registered).length;
@@ -44,14 +44,60 @@ function getQueueState(slots) {
   };
 }
 
+function mergeQueueStates(states) {
+  const readyState = states.find((state) => state.state === "ready");
+
+  if (readyState) {
+    return {
+      state: "ready",
+      emptySlotCount: states.reduce((total, state) => total + (state.emptySlotCount || 0), 0),
+      replaceableSlotCount: states.reduce((total, state) => total + (state.replaceableSlotCount || 0), 0),
+      accountCount: states.length,
+    };
+  }
+
+  const queuedStates = states
+    .filter((state) => state.state === "queue" && state.nextAvailableAt)
+    .sort((a, b) => new Date(a.nextAvailableAt).getTime() - new Date(b.nextAvailableAt).getTime());
+
+  if (queuedStates.length > 0) {
+    return {
+      state: "queue",
+      emptySlotCount: 0,
+      nextAvailableAt: queuedStates[0].nextAvailableAt,
+      accountCount: states.length,
+    };
+  }
+
+  return {
+    state: "full",
+    emptySlotCount: 0,
+    accountCount: states.length,
+  };
+}
+
 export async function onRequestGet({ env }) {
   try {
-    const { cookieJar, final } = await loginSession(env);
-    const home = await fetchMyAimeHome(cookieJar, final);
+    const states = [];
+    let lastAccountError = null;
+
+    for (const account of getSegaAccounts(env)) {
+      try {
+        const { cookieJar, final } = await loginSession(env, account);
+        const home = await fetchMyAimeHome(cookieJar, final);
+        states.push(getQueueState(home.slots));
+      } catch (error) {
+        lastAccountError = error;
+      }
+    }
+
+    if (states.length === 0 && lastAccountError) {
+      throw lastAccountError;
+    }
 
     return json({
       ok: true,
-      ...getQueueState(home.slots),
+      ...mergeQueueStates(states),
     });
   } catch (error) {
     return json(

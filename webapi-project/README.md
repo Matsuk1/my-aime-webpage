@@ -23,22 +23,33 @@ SEGA_PASSWORD=your-sega-password
 SESSION_SECRET=change-this-to-a-long-random-string
 ```
 
+For multiple SEGA accounts, use `SEGA_ACCOUNTS` instead. Each account adds up
+to three My Aime slots to the pool:
+
+```env
+SEGA_ACCOUNTS=[{"id":"sega-id-1","password":"password-1"},{"id":"sega-id-2","password":"password-2"}]
+SESSION_SECRET=change-this-to-a-long-random-string
+```
+
 For Cloudflare Pages production, add these environment variables in the Pages project settings:
 
 ```text
-SEGA_ID
-SEGA_PASSWORD
+SEGA_ACCOUNTS
 SESSION_SECRET
 ```
 
+`SEGA_ID` and `SEGA_PASSWORD` are still supported for single-account deployments
+when `SEGA_ACCOUNTS` is not set.
+
 The page calls `GET /api/my-aime/status` on load to check whether a slot is
-available now or when the next temporary slot becomes replaceable. It calls
-`POST /api/my-aime/score` to log in server-side, reuse an already-bound card
-when possible, bind the new card to an empty slot, or replace the oldest
-timestamp-named card only when all slots are full and that card is older than 5
-minutes. New temporary cards use the current millisecond timestamp as the alias.
-The function then calls JiETNG with `ver=jp` and the bound Aime slot and returns
-the generated PNG.
+available across the SEGA account pool or when the next temporary slot becomes
+replaceable. It calls `POST /api/my-aime/score` to log in server-side, reuse an
+already-bound card when possible, bind the new card to an empty slot on the
+first available account, or replace the oldest timestamp-named card only when
+that account is full and that card is older than 5 minutes. New temporary cards
+use the current millisecond timestamp as the alias. The function then calls
+JiETNG with `ver=jp`, the selected account credentials, and the bound Aime slot,
+then returns the generated PNG.
 
 `POST /api/my-aime/bind` is still kept for compatibility with the earlier JSON
 binding flow.
@@ -62,8 +73,7 @@ CLOUDFLARE_ACCOUNT_ID
 Configure these Cloudflare Pages environment variables for production:
 
 ```text
-SEGA_ID
-SEGA_PASSWORD
+SEGA_ACCOUNTS
 SESSION_SECRET
 ```
 
