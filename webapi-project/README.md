@@ -31,11 +31,14 @@ SEGA_PASSWORD
 SESSION_SECRET
 ```
 
-The page calls `POST /api/my-aime/score`. The function logs in server-side,
-removes timestamp-named cards older than 5 minutes, binds the new card with the
-current millisecond timestamp as its alias, calls JiETNG with `ver=jp` and the
-bound Aime slot, returns the generated PNG, and sets an encrypted HttpOnly
-session cookie that expires after 5 minutes.
+The page calls `GET /api/my-aime/status` on load to check whether a slot is
+available now or when the next temporary slot becomes replaceable. It calls
+`POST /api/my-aime/score` to log in server-side, reuse an already-bound card
+when possible, bind the new card to an empty slot, or replace the oldest
+timestamp-named card only when all slots are full and that card is older than 5
+minutes. New temporary cards use the current millisecond timestamp as the alias.
+The function then calls JiETNG with `ver=jp` and the bound Aime slot and returns
+the generated PNG.
 
 `POST /api/my-aime/bind` is still kept for compatibility with the earlier JSON
 binding flow.

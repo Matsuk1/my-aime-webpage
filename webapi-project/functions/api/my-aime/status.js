@@ -7,16 +7,26 @@ function getQueueState(slots) {
     return {
       state: "ready",
       emptySlotCount,
-      message: "现在可以查询。",
     };
   }
 
-  const activeTemporarySlots = slots
+  const temporarySlots = slots
     .filter((slot) => slot.registered && slot.aliasTimestamp)
     .map((slot) => ({
       slotNo: slot.slotNo,
       expiresAtMs: slot.aliasTimestamp + sessionMaxAgeMs,
-    }))
+    }));
+  const expiredTemporarySlots = temporarySlots.filter((slot) => slot.expiresAtMs <= Date.now());
+
+  if (expiredTemporarySlots.length > 0) {
+    return {
+      state: "ready",
+      emptySlotCount: 0,
+      replaceableSlotCount: expiredTemporarySlots.length,
+    };
+  }
+
+  const activeTemporarySlots = temporarySlots
     .filter((slot) => slot.expiresAtMs > Date.now())
     .sort((a, b) => a.expiresAtMs - b.expiresAtMs);
 
@@ -25,14 +35,12 @@ function getQueueState(slots) {
       state: "queue",
       emptySlotCount: 0,
       nextAvailableAt: new Date(activeTemporarySlots[0].expiresAtMs).toISOString(),
-      message: "当前临时卡槽都在使用，需要等待。",
     };
   }
 
   return {
     state: "full",
     emptySlotCount: 0,
-    message: "当前没有可用空卡槽。",
   };
 }
 
@@ -50,7 +58,6 @@ export async function onRequestGet({ env }) {
       {
         ok: true,
         state: "unknown",
-        message: "暂时无法预检排队状态，可以直接输入卡号查询。",
       },
       200,
     );

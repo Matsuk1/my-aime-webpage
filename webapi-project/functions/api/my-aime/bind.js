@@ -110,20 +110,31 @@ function slotContainsAccessCode(slot, accessCode) {
   return slot.registered && slot.blockId && slot.statusText.replace(/\D/g, "").includes(accessCode);
 }
 
-export async function removeExpiredTimestampSlots(cookieJar, home) {
-  const expiredSlots = home.slots.filter(
-    (slot) =>
-      slot.registered &&
-      slot.blockId &&
-      slot.aliasTimestamp &&
-      Date.now() - slot.aliasTimestamp >= sessionMaxAgeMs,
-  );
+function findExpiredTimestampSlots(slots) {
+  return slots
+    .filter(
+      (slot) =>
+        slot.registered &&
+        slot.blockId &&
+        slot.aliasTimestamp &&
+        Date.now() - slot.aliasTimestamp >= sessionMaxAgeMs,
+    )
+    .sort((a, b) => a.aliasTimestamp - b.aliasTimestamp);
+}
 
-  for (const slot of expiredSlots) {
-    await removeSlotByBlockId(cookieJar, slot);
+export async function replaceExpiredTimestampSlotWhenFull(cookieJar, home) {
+  if (home.slots.some((slot) => !slot.registered)) {
+    return null;
   }
 
-  return expiredSlots;
+  const [expiredSlot] = findExpiredTimestampSlots(home.slots);
+
+  if (!expiredSlot) {
+    return null;
+  }
+
+  await removeSlotByBlockId(cookieJar, expiredSlot);
+  return expiredSlot;
 }
 
 export async function bindAimeCard(env, request, accessCode) {
@@ -152,18 +163,23 @@ export async function bindAimeCard(env, request, accessCode) {
     };
   }
 
-  const removedExpiredSlots = await removeExpiredTimestampSlots(cookieJar, homeBefore);
+  let replacedExpiredSlot = null;
+  let emptySlot = homeBefore.slots.find((slot) => !slot.registered);
 
-  if (removedExpiredSlots.length > 0) {
-    homeBefore = await fetchMyAimeHome(cookieJar);
+  if (!emptySlot) {
+    replacedExpiredSlot = await replaceExpiredTimestampSlotWhenFull(cookieJar, homeBefore);
   }
 
-  const emptySlot = homeBefore.slots.find((slot) => !slot.registered);
+  if (replacedExpiredSlot) {
+    homeBefore = await fetchMyAimeHome(cookieJar);
+    emptySlot = homeBefore.slots.find((slot) => !slot.registered);
+  }
 
   if (!emptySlot) {
     return {
       ok: false,
       status: 409,
+      errorCode: "NO_AVAILABLE_SLOT",
       error: "没有可绑定的空卡槽。",
       slots: homeBefore.slots,
     };
@@ -253,7 +269,7 @@ export async function bindAimeCard(env, request, accessCode) {
     boundSlotNo: emptySlot.slotNo,
     alreadyBound: false,
     aliasTimestamp,
-    removedExpiredSlotNos: removedExpiredSlots.map((slot) => slot.slotNo),
+    removedExpiredSlotNos: replacedExpiredSlot ? [replacedExpiredSlot.slotNo] : [],
     session: {
       expiresAt: session.expiresAt,
       maxAgeSeconds: session.maxAgeSeconds,
