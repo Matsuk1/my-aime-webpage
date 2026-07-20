@@ -15,7 +15,8 @@ npm install
 npm run dev
 ```
 
-Then open the local URL printed by Wrangler.
+Then open the local URL printed by Wrangler. The dev command builds the Vite
+frontend into `dist` before starting Pages Functions.
 
 ## Environment
 
@@ -68,7 +69,9 @@ The repository includes `.github/workflows/deploy-pages.yml`. It deploys this
 project to Cloudflare Pages when `main` is pushed, using:
 
 ```bash
-wrangler pages deploy public --project-name=my-aime-webpage
+npm ci
+npm run build
+wrangler pages deploy dist --project-name=my-aime-webpage
 ```
 
 Configure these GitHub repository secrets:

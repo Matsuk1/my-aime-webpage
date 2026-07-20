@@ -1,12 +1,5 @@
-const CACHE_NAME = "maiscore-static-v6";
-const STATIC_ASSETS = [
-  "./",
-  "./index.html",
-  "./styles.css",
-  "./app.js",
-  "./logo.svg",
-  "./manifest.webmanifest",
-];
+const CACHE_NAME = "maiscore-static-v7";
+const STATIC_ASSETS = ["./"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)));
@@ -25,7 +18,7 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  if (url.origin !== location.origin || url.pathname.startsWith("/api/")) {
+  if (event.request.method !== "GET" || url.origin !== location.origin || url.pathname.startsWith("/api/")) {
     return;
   }
 
@@ -36,7 +29,7 @@ self.addEventListener("fetch", (event) => {
       }
 
       return fetch(event.request).then((response) => {
-        if (event.request.method === "GET" && response.ok) {
+        if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }

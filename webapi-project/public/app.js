@@ -27,41 +27,13 @@ let scannerOpenTimer = null;
 let scannerStream = null;
 let scannerTimer = null;
 let scannerWorkerPromise = null;
+let paddleOcrPromise = null;
 let scannerCandidateCode = "";
 let scannerCandidateCount = 0;
 const availabilityCacheKey = "maiscore-availability-cache";
 const availabilityCacheTtlMs = 60 * 1000;
 const scannerIntervalMs = 1600;
 const tesseractScriptUrl = "https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js";
-const templateWidth = 16;
-const templateHeight = 28;
-const accessCodeDigitTemplates = [
-  ["0", "00000000000007e00ff81818000c000400040000000000000000000000000000000000002000300018001c100ff003c00000000000000000"],
-  ["0", "00000000000003800ff01c383818300c200c200c20000000000020002004000020002004300c3008381818380ff003e00000000000000000"],
-  ["1", "000000000000000000000000000000000000018003e007f00ff80ff81ff80ff803f801f000e0000000000000000000000000000000000000"],
-  ["1", "000000000000000000000000000001c007e00ff01ff81ff81ff81ff80ff807f001e001c000e000c000000000000000000000000000000000"],
-  ["1", "000000000000000003c007f007f00ff80ff81ff81ff81ff807f003e001e00000000000000000000000000000000000400000000000000000"],
-  ["1", "00000000000001c003e007e001c000c000c000c000c000c000c000c000c000c000c000c000c000c00080008000800080000000000000000"],
-  ["2", "000000000000000007e00ff01818300c300c2004000c000c000c001c0038007000e001c0038007000e001c001ff01ff80000000000000000"],
-  ["2", "000000000000000007e00e701c18380c3004000400040004000c001c00380070006000c003800700060008001ff01ff80000000000000000"],
-  ["3", "00000000000018001ffc001c003000200000008001c000f00038000c000c0000000000003000300018001c180ff003e00000000000000000"],
-  ["3", "00000000000000001ff80ffc00180030006000c001c001e000700018000c000c000c000c300c300c381818180e7007e00000000000000000"],
-  ["3", "0000000000000c001ffc001c00380070006000c001c001f00038000c000c0004000420043004300c180c18180ff003c00000000000000000"],
-  ["3", "00000000000000201ffc001c0038007000e001c001c001e000380018000c0004000400043004300c300c18180e7003e00000000000000000"],
-  ["4", "0000000000000000001800380078007800f801d801980398071806180e180c181818181838183ffc003c0018001800080000000000000000"],
-  ["4", "0000000000000000001000380078007800f8019801900318071806180c181c18181838183ffc1ffc00180018001800000000000000000000"],
-  ["5", "0000000000000ff01ff01000000000000000000003003fe03838001c000c00040000000000000000000010301ff003c00000000000000000"],
-  ["5", "0000000000000fe01ff01800180010001000100033003fe03c38101c000c00040000000000000000001830381ff003c00000000000000000"],
-  ["5", "0000000000000ff01ff01800180010003000300030003fe03c700018000c000c00040004000c000c001c10381e7007c00000000000000000"],
-  ["5", "0000000000001ff01e001800180030003000300030003fe038380018000c000c000c0004000c000c001c30381ff007c00000000000000000"],
-  ["5", "0000000000000c001ff01800380030003000300033003fe03c303018000c0004000400040004000c001c18181ff001800000000000000000"],
-  ["6", "00000000000000c00080018003000300060006000e000fe01e381808300c20046006600660062006300c18081c3807e00000000000000000"],
-  ["6", "00000000000000c00080018001000300060006000e000fe01c383008300c20046006600660062004300c18080c3007e00000000000000000"],
-  ["7", "00000000000010003ffe000c000c000c0008001800100030003000200060004000c000c00080018001000300030002000600000000000000"],
-  ["8", "00000000000007e00e701818101810081008181818300ff00ff01c78300c300c6006600660066006300c300c1c3807e00000000000000000"],
-  ["8", "00000000000007e00c301818180810081008181818180ff00ff01c38100c300420066006600620063004300c1c3807e00000000000000000"],
-  ["9", "000000000000000003800ff01c18300c200c2004200020003000300018100c3807f800700020000000000100010001000000000000000000"],
-].map(([digit, hex]) => [digit, hexToBits(hex)]);
 
 const messages = {
   "zh-Hans": {
@@ -345,15 +317,6 @@ function loadScript(src) {
   });
 }
 
-function hexToBits(hex) {
-  return hex
-    .split("")
-    .flatMap((char) => {
-      const value = Number.parseInt(char, 16);
-      return [8, 4, 2, 1].map((mask) => (value & mask ? 1 : 0));
-    });
-}
-
 function thresholdCanvas(canvas) {
   const context = canvas.getContext("2d", { willReadFrequently: true });
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
@@ -386,201 +349,6 @@ function enhanceAccessCodeCanvas(canvas) {
 
   context.putImageData(imageData, 0, 0);
   return canvas;
-}
-
-function canvasToBinary(canvas) {
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
-  const binary = new Uint8Array(canvas.width * canvas.height);
-
-  for (let index = 0; index < binary.length; index += 1) {
-    const source = index * 4;
-    const gray = data[source] * 0.299 + data[source + 1] * 0.587 + data[source + 2] * 0.114;
-    binary[index] = gray > 128 ? 1 : 0;
-  }
-
-  return {
-    data: binary,
-    width: canvas.width,
-    height: canvas.height,
-  };
-}
-
-function binaryAt(binary, x, y) {
-  return binary.data[y * binary.width + x];
-}
-
-function columnRanges(binary, options = {}) {
-  const top = options.top || 0;
-  const bottom = options.bottom || binary.height;
-  const sums = [];
-
-  for (let x = 0; x < binary.width; x += 1) {
-    let sum = 0;
-
-    for (let y = top; y < bottom; y += 1) {
-      sum += binaryAt(binary, x, y);
-    }
-
-    sums.push(sum);
-  }
-
-  const maxSum = Math.max(...sums);
-
-  if (maxSum < 2) {
-    return [];
-  }
-
-  const threshold = Math.max(2, maxSum * 0.16);
-  const ranges = [];
-  let start = null;
-
-  for (let x = 0; x < sums.length; x += 1) {
-    const left = sums[Math.max(0, x - 1)];
-    const center = sums[x];
-    const right = sums[Math.min(sums.length - 1, x + 1)];
-    const active = (left + center + right) / 3 > threshold;
-
-    if (active && start === null) {
-      start = x;
-    }
-
-    if ((!active || x === sums.length - 1) && start !== null) {
-      const end = active && x === sums.length - 1 ? x + 1 : x;
-
-      if (end - start >= 3) {
-        ranges.push({ start, end });
-      }
-
-      start = null;
-    }
-  }
-
-  return ranges.filter((range) => range.end - range.start <= binary.width * 0.12);
-}
-
-function normalizedBitsForRange(binary, range) {
-  let minX = range.start;
-  let maxX = range.end - 1;
-  let minY = binary.height;
-  let maxY = 0;
-
-  for (let x = range.start; x < range.end; x += 1) {
-    for (let y = 0; y < Math.floor(binary.height * 0.68); y += 1) {
-      if (binaryAt(binary, x, y)) {
-        minX = Math.min(minX, x);
-        maxX = Math.max(maxX, x);
-        minY = Math.min(minY, y);
-        maxY = Math.max(maxY, y);
-      }
-    }
-  }
-
-  if (maxY <= minY || maxX <= minX) {
-    return null;
-  }
-
-  minX = Math.max(0, minX - 2);
-  maxX = Math.min(binary.width - 1, maxX + 2);
-  minY = Math.max(0, minY - 3);
-  maxY = Math.min(Math.floor(binary.height * 0.7), maxY + 3);
-
-  const sourceWidth = maxX - minX + 1;
-  const sourceHeight = maxY - minY + 1;
-  const scale = Math.min((templateWidth - 2) / sourceWidth, (templateHeight - 2) / sourceHeight);
-  const fittedWidth = Math.max(1, Math.round(sourceWidth * scale));
-  const fittedHeight = Math.max(1, Math.round(sourceHeight * scale));
-  const offsetX = Math.floor((templateWidth - fittedWidth) / 2);
-  const offsetY = Math.floor((templateHeight - fittedHeight) / 2);
-  const bits = new Array(templateWidth * templateHeight).fill(0);
-
-  for (let y = 0; y < fittedHeight; y += 1) {
-    for (let x = 0; x < fittedWidth; x += 1) {
-      const sourceX = Math.min(maxX, Math.max(minX, Math.round(minX + (x + 0.5) / scale)));
-      const sourceY = Math.min(maxY, Math.max(minY, Math.round(minY + (y + 0.5) / scale)));
-      bits[(offsetY + y) * templateWidth + offsetX + x] = binaryAt(binary, sourceX, sourceY);
-    }
-  }
-
-  return bits;
-}
-
-function templateScore(bits, template) {
-  let union = 0;
-  let mismatch = 0;
-
-  for (let index = 0; index < bits.length; index += 1) {
-    if (bits[index] || template[index]) {
-      union += 1;
-
-      if (bits[index] !== template[index]) {
-        mismatch += 1;
-      }
-    }
-  }
-
-  return union ? mismatch / union : 1;
-}
-
-function recognizeAccessCodeByTemplate(canvas) {
-  const binary = canvasToBinary(canvas);
-  let ranges = columnRanges(binary, {
-    top: 0,
-    bottom: Math.floor(binary.height * 0.68),
-  });
-
-  if (ranges.length > 20) {
-    ranges = ranges.filter((range) => range.start > binary.width * 0.035 && range.end < binary.width * 0.965);
-  }
-
-  if (ranges.length !== 20) {
-    return "";
-  }
-
-  const digits = [];
-  const scores = [];
-  const scoreGaps = [];
-
-  for (const range of ranges) {
-    const bits = normalizedBitsForRange(binary, range);
-
-    if (!bits) {
-      return "";
-    }
-
-    let bestDigit = "";
-    let bestScore = 1;
-    let secondBestScore = 1;
-
-    for (const [digit, template] of accessCodeDigitTemplates) {
-      const score = templateScore(bits, template);
-
-      if (score < bestScore) {
-        secondBestScore = bestScore;
-        bestScore = score;
-        bestDigit = digit;
-      } else if (score < secondBestScore) {
-        secondBestScore = score;
-      }
-    }
-
-    digits.push(bestDigit);
-    scores.push(bestScore);
-    scoreGaps.push(secondBestScore - bestScore);
-  }
-
-  const averageScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
-  const worstScore = Math.max(...scores);
-  const averageGap = scoreGaps.reduce((sum, gap) => sum + gap, 0) / scoreGaps.length;
-  const worstGap = Math.min(...scoreGaps);
-  const uniqueDigits = new Set(digits).size;
-
-  if (averageScore > 0.28 || worstScore > 0.44 || averageGap < 0.08 || worstGap < 0.025 || uniqueDigits < 5) {
-    return "";
-  }
-
-  return digits.join("");
 }
 
 function cropFrameToCanvas(frame, region, options = {}) {
@@ -682,6 +450,45 @@ function videoFrameToOcrCanvases() {
   ];
 }
 
+async function createPaddleOcr() {
+  const { PaddleOCR } = await import("@paddleocr/paddleocr-js");
+
+  return PaddleOCR.create({
+    textDetectionModelName: "PP-OCRv5_mobile_det",
+    textRecognitionModelName: "PP-OCRv5_mobile_rec",
+    textDetectionBatchSize: 1,
+    textRecognitionBatchSize: 4,
+    ortOptions: {
+      backend: "wasm",
+      wasmPaths: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/",
+      numThreads: 1,
+      simd: true,
+    },
+  });
+}
+
+function ensurePaddleOcr() {
+  paddleOcrPromise ||= createPaddleOcr();
+  return paddleOcrPromise;
+}
+
+async function recognizeAccessCodeByPaddle(canvases) {
+  const ocr = await ensurePaddleOcr();
+  const results = await ocr.predict(canvases, {
+    textDetLimitSideLen: 960,
+    textDetThresh: 0.2,
+    textDetBoxThresh: 0.25,
+    textDetUnclipRatio: 1.8,
+    textRecScoreThresh: 0.2,
+  });
+  const text = results
+    .flatMap((result) => result.items || [])
+    .map((item) => item.text || "")
+    .join(" ");
+
+  return extractAccessCode(text);
+}
+
 async function createOcrWorker() {
   await loadScript(tesseractScriptUrl);
 
@@ -754,15 +561,7 @@ async function scanVideoFrame() {
   setScannerStatusKey("ocrReading");
 
   try {
-    let accessCode = "";
-
-    for (const canvas of canvases) {
-      accessCode = recognizeAccessCodeByTemplate(canvas);
-
-      if (accessCode) {
-        break;
-      }
-    }
+    let accessCode = await recognizeAccessCodeByPaddle(canvases);
 
     if (!accessCode) {
       const worker = await ensureOcrWorker();

@@ -17,11 +17,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Install dependencies
+        working-directory: webapi-project
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: webapi-project
+        run: npm run build
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: webapi-project
-          command: pages deploy public --project-name=my-aime-webpage
+          command: pages deploy dist --project-name=my-aime-webpage
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
