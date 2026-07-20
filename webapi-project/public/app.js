@@ -27,6 +27,8 @@ let scannerOpenTimer = null;
 let scannerStream = null;
 let scannerTimer = null;
 let scannerWorkerPromise = null;
+let scannerCandidateCode = "";
+let scannerCandidateCount = 0;
 const availabilityCacheKey = "maiscore-availability-cache";
 const availabilityCacheTtlMs = 60 * 1000;
 const scannerIntervalMs = 1600;
@@ -538,6 +540,7 @@ function recognizeAccessCodeByTemplate(canvas) {
 
   const digits = [];
   const scores = [];
+  const scoreGaps = [];
 
   for (const range of ranges) {
     const bits = normalizedBitsForRange(binary, range);
@@ -548,24 +551,32 @@ function recognizeAccessCodeByTemplate(canvas) {
 
     let bestDigit = "";
     let bestScore = 1;
+    let secondBestScore = 1;
 
     for (const [digit, template] of accessCodeDigitTemplates) {
       const score = templateScore(bits, template);
 
       if (score < bestScore) {
+        secondBestScore = bestScore;
         bestScore = score;
         bestDigit = digit;
+      } else if (score < secondBestScore) {
+        secondBestScore = score;
       }
     }
 
     digits.push(bestDigit);
     scores.push(bestScore);
+    scoreGaps.push(secondBestScore - bestScore);
   }
 
   const averageScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
   const worstScore = Math.max(...scores);
+  const averageGap = scoreGaps.reduce((sum, gap) => sum + gap, 0) / scoreGaps.length;
+  const worstGap = Math.min(...scoreGaps);
+  const uniqueDigits = new Set(digits).size;
 
-  if (averageScore > 0.34 || worstScore > 0.52) {
+  if (averageScore > 0.28 || worstScore > 0.44 || averageGap < 0.08 || worstGap < 0.025 || uniqueDigits < 5) {
     return "";
   }
 
@@ -706,6 +717,22 @@ function ensureOcrWorker() {
   return scannerWorkerPromise;
 }
 
+function resetScannerCandidate() {
+  scannerCandidateCode = "";
+  scannerCandidateCount = 0;
+}
+
+function acceptScannerCode(accessCode) {
+  if (accessCode !== scannerCandidateCode) {
+    scannerCandidateCode = accessCode;
+    scannerCandidateCount = 1;
+    return false;
+  }
+
+  scannerCandidateCount += 1;
+  return scannerCandidateCount >= 2;
+}
+
 function extractAccessCode(text) {
   const compact = text.replace(/\D/g, "");
   const match = compact.match(/\d{20}/);
@@ -751,6 +778,11 @@ async function scanVideoFrame() {
     }
 
     if (accessCode) {
+      if (!acceptScannerCode(accessCode)) {
+        setScannerStatusKey("scannerReady");
+        return;
+      }
+
       accessCodeInput.value = formatAccessCode(accessCode);
       setStatusKey("ocrDone");
       setScannerStatusKey("ocrDone");
@@ -773,6 +805,7 @@ async function startScanner() {
 
   clearTimeout(scannerCloseTimer);
   clearTimeout(scannerOpenTimer);
+  resetScannerCandidate();
   scannerDialog.classList.remove("is-closing", "is-visible");
   scannerDialog.classList.add("is-entering");
 
@@ -834,6 +867,7 @@ function stopScanner(options = {}) {
   scannerStream = null;
   scannerVideo.pause();
   scannerVideo.srcObject = null;
+  resetScannerCandidate();
   isOcrBusy = false;
   scanButton.disabled = isBusy;
   queryButton.disabled = isBusy;
