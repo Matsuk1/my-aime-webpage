@@ -653,12 +653,12 @@ button:focus-visible {
 
 .scanner-access-frame {
   position: absolute;
-  left: 11%;
-  top: 39%;
-  width: 82%;
-  aspect-ratio: 47 / 8;
+  left: 41.176%;
+  top: 76.852%;
+  width: 55.294%;
+  height: 14.815%;
   border: 3px solid #ffd60a;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 .scanner-access-frame span {
