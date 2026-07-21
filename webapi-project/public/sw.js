@@ -1,4 +1,4 @@
-const CACHE_NAME = "maiscore-static-v10";
+const CACHE_NAME = "maiscore-static-v11";
 const STATIC_ASSETS = ["./"];
 
 self.addEventListener("install", (event) => {
