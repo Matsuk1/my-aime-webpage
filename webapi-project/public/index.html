@@ -113,12 +113,12 @@
         <div class="scanner-toolbar">
           <button id="closeScannerButton" class="scanner-close" type="button" aria-label="Close">×</button>
           <p id="scannerStatus" data-scanner-status-key="scannerReady">将 ACCESS CODE 对准黄色框。</p>
-          <label class="scanner-pick">
-            <input id="scannerFileInput" type="file" accept="image/*" capture="environment" />
-            <span data-i18n="scannerPick">选择照片</span>
-          </label>
+          <button id="captureScannerButton" class="scanner-capture" type="button" disabled>
+            <span data-i18n="scannerCapture">识别</span>
+          </button>
         </div>
         <div class="scanner-stage">
+          <video id="scannerVideo" autoplay muted playsinline></video>
           <div class="scanner-card-frame">
             <div class="scanner-access-frame">
               <span>ACCESS CODE</span>

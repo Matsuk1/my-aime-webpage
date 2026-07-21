@@ -12,7 +12,8 @@ const closeDialogButton = document.querySelector("#closeDialogButton");
 const downloadScoreButton = document.querySelector("#downloadScoreButton");
 const scannerDialog = document.querySelector("#scannerDialog");
 const closeScannerButton = document.querySelector("#closeScannerButton");
-const scannerFileInput = document.querySelector("#scannerFileInput");
+const captureScannerButton = document.querySelector("#captureScannerButton");
+const scannerVideo = document.querySelector("#scannerVideo");
 const scannerStatus = document.querySelector("#scannerStatus");
 let availabilityTimer = null;
 let scoreImageUrl = "";
@@ -25,6 +26,8 @@ let scannerCloseTimer = null;
 let openCvPromise = null;
 let tesseractPromise = null;
 let ocrWorker = null;
+let scannerStream = null;
+let scannerCameraRequestId = 0;
 const availabilityCacheKey = "maiscore-availability-cache";
 const availabilityCacheTtlMs = 60 * 1000;
 const codeCrops = [
@@ -42,14 +45,16 @@ const messages = {
     introLine2: "生成日服成绩图。",
     accessLabel: "Aime access code",
     queryButton: "查询",
-    scannerPick: "选择照片",
+    scannerCapture: "识别",
     scannerReady: "将 ACCESS CODE 对准黄色框。",
+    scannerCameraStarting: "正在启动摄像头...",
+    scannerCameraFailed: "无法访问摄像头，请检查浏览器权限。",
     scannerLoading: "加载识别内核...",
     scannerDetecting: "检测卡片和 ACCESS CODE...",
     scannerReading: "读取数字...",
     scannerSuccess: "已识别并填入。",
     scannerNoCode: "没有可靠识别到 20 位卡号，请换一张更清晰的照片。",
-    scannerFailed: "识别失败，请重新选择照片。",
+    scannerFailed: "识别失败，请重新对准后重试。",
     scoreTypeLabel: "成绩类型",
     waiting: "等待输入卡号。",
     queueCountdown: (seconds) => `等待 ${seconds}s。`,
@@ -77,14 +82,16 @@ const messages = {
     introLine2: "get a JP score card.",
     accessLabel: "Aime access code",
     queryButton: "Get score",
-    scannerPick: "Choose photo",
+    scannerCapture: "Scan",
     scannerReady: "Place ACCESS CODE inside the yellow frame.",
+    scannerCameraStarting: "Starting camera...",
+    scannerCameraFailed: "Could not access the camera. Check browser permission.",
     scannerLoading: "Loading scanner...",
     scannerDetecting: "Detecting card and ACCESS CODE...",
     scannerReading: "Reading digits...",
     scannerSuccess: "Code filled.",
     scannerNoCode: "Could not read a reliable 20-digit code. Try a clearer photo.",
-    scannerFailed: "Scan failed. Choose another photo.",
+    scannerFailed: "Scan failed. Align the card and try again.",
     scoreTypeLabel: "Score type",
     waiting: "Waiting for an Aime code.",
     queueCountdown: (seconds) => `Wait ${seconds}s.`,
@@ -112,14 +119,16 @@ const messages = {
     introLine2: "生成日服成績圖。",
     accessLabel: "Aime access code",
     queryButton: "查詢",
-    scannerPick: "選擇照片",
+    scannerCapture: "識別",
     scannerReady: "將 ACCESS CODE 對準黃色框。",
+    scannerCameraStarting: "正在啟動攝影機...",
+    scannerCameraFailed: "無法存取攝影機，請檢查瀏覽器權限。",
     scannerLoading: "載入識別核心...",
     scannerDetecting: "偵測卡片與 ACCESS CODE...",
     scannerReading: "讀取數字...",
     scannerSuccess: "已識別並填入。",
     scannerNoCode: "沒有可靠識別到 20 位卡號，請換一張更清晰的照片。",
-    scannerFailed: "識別失敗，請重新選擇照片。",
+    scannerFailed: "識別失敗，請重新對準後再試。",
     scoreTypeLabel: "成績類型",
     waiting: "等待輸入卡號。",
     queueCountdown: (seconds) => `等待 ${seconds}s。`,
@@ -147,14 +156,16 @@ const messages = {
     introLine2: "일본 서버 성과 이미지를 생성하세요.",
     accessLabel: "Aime access code",
     queryButton: "조회",
-    scannerPick: "사진 선택",
+    scannerCapture: "스캔",
     scannerReady: "ACCESS CODE를 노란 프레임에 맞춰 주세요.",
+    scannerCameraStarting: "카메라 시작 중...",
+    scannerCameraFailed: "카메라에 접근할 수 없습니다. 브라우저 권한을 확인해 주세요.",
     scannerLoading: "스캐너 로딩 중...",
     scannerDetecting: "카드와 ACCESS CODE 감지 중...",
     scannerReading: "숫자 읽는 중...",
     scannerSuccess: "번호가 입력되었습니다.",
     scannerNoCode: "신뢰할 수 있는 20자리 번호를 읽지 못했습니다. 더 선명한 사진을 사용해 주세요.",
-    scannerFailed: "스캔 실패. 다른 사진을 선택해 주세요.",
+    scannerFailed: "스캔 실패. 카드를 다시 맞춘 뒤 재시도해 주세요.",
     scoreTypeLabel: "성과 유형",
     waiting: "카드 번호 입력을 기다리는 중입니다.",
     queueCountdown: (seconds) => `${seconds}초 대기.`,
@@ -211,7 +222,7 @@ function applyLanguage(language) {
   closeDialogButton.setAttribute("aria-label", t("closeDialog"));
   downloadScoreButton.setAttribute("aria-label", t("downloadScore"));
   closeScannerButton.setAttribute("aria-label", t("closeDialog"));
-  scanButton.setAttribute("aria-label", t("scannerPick"));
+  scanButton.setAttribute("aria-label", t("scannerCapture"));
 
   if (statusText.dataset.statusKey) {
     const args = JSON.parse(statusText.dataset.statusArgs || "[]");
@@ -962,30 +973,6 @@ function scoreCandidate(candidate) {
   return Math.abs(candidate.digits.length - 20) * 100 - candidate.confidence;
 }
 
-function imageFileToCanvas(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-
-    image.onload = () => {
-      const scale = Math.min(1, 2200 / Math.max(image.naturalWidth, image.naturalHeight));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(image.naturalWidth * scale);
-      canvas.height = Math.round(image.naturalHeight * scale);
-      canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(url);
-      resolve(canvas);
-    };
-
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Image decode failed"));
-    };
-
-    image.src = url;
-  });
-}
-
 async function ensureOcrWorker(tesseract) {
   if (ocrWorker) return ocrWorker;
 
@@ -1006,9 +993,9 @@ async function ensureOcrWorker(tesseract) {
   return ocrWorker;
 }
 
-async function recognizeAccessCodeFromFile(file) {
+async function recognizeAccessCodeFromCanvas(sourceCanvas) {
   setScannerStatusKey("scannerLoading");
-  const [cv, tesseract, sourceCanvas] = await Promise.all([loadOpenCv(), loadTesseract(), imageFileToCanvas(file)]);
+  const [cv, tesseract] = await Promise.all([loadOpenCv(), loadTesseract()]);
   const worker = await ensureOcrWorker(tesseract);
   setScannerStatusKey("scannerDetecting");
 
@@ -1111,6 +1098,85 @@ async function recognizeAccessCodeFromFile(file) {
   }
 
   return best?.digits.length === 20 ? best.digits : "";
+}
+
+function stopScannerCamera() {
+  scannerCameraRequestId += 1;
+  scannerStream?.getTracks().forEach((track) => track.stop());
+  scannerStream = null;
+  scannerVideo.srcObject = null;
+  captureScannerButton.disabled = true;
+}
+
+async function startScannerCamera() {
+  stopScannerCamera();
+  const requestId = scannerCameraRequestId;
+  captureScannerButton.disabled = true;
+  setScannerStatusKey("scannerCameraStarting");
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setScannerStatusKey("scannerCameraFailed");
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 3840 },
+        height: { ideal: 2160 },
+      },
+      audio: false,
+    });
+
+    if (requestId !== scannerCameraRequestId || !scannerDialog.open) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+
+    scannerStream = stream;
+    scannerVideo.srcObject = scannerStream;
+    await scannerVideo.play();
+    captureScannerButton.disabled = false;
+    setScannerStatusKey("scannerReady");
+  } catch (error) {
+    console.warn("Camera start failed:", error);
+    stopScannerCamera();
+    setScannerStatusKey("scannerCameraFailed");
+  }
+}
+
+function captureScannerFrame() {
+  if (!scannerVideo.videoWidth || !scannerVideo.videoHeight) {
+    throw new Error("Video is not ready");
+  }
+
+  const stage = document.querySelector(".scanner-stage");
+  const frame = document.querySelector(".scanner-card-frame");
+  const stageRect = stage.getBoundingClientRect();
+  const frameRect = frame.getBoundingClientRect();
+  const viewportWidth = stageRect.width;
+  const viewportHeight = stageRect.height;
+  const coverScale = Math.max(viewportWidth / scannerVideo.videoWidth, viewportHeight / scannerVideo.videoHeight);
+  const displayedWidth = scannerVideo.videoWidth * coverScale;
+  const displayedHeight = scannerVideo.videoHeight * coverScale;
+  const hiddenX = (displayedWidth - viewportWidth) / 2;
+  const hiddenY = (displayedHeight - viewportHeight) / 2;
+  const margin = Math.min(viewportWidth, viewportHeight) * 0.04;
+  const visibleX = clamp(frameRect.left - stageRect.left - margin, 0, viewportWidth);
+  const visibleY = clamp(frameRect.top - stageRect.top - margin, 0, viewportHeight);
+  const visibleRight = clamp(frameRect.right - stageRect.left + margin, visibleX, viewportWidth);
+  const visibleBottom = clamp(frameRect.bottom - stageRect.top + margin, visibleY, viewportHeight);
+  const sx = (visibleX + hiddenX) / coverScale;
+  const sy = (visibleY + hiddenY) / coverScale;
+  const sw = (visibleRight - visibleX) / coverScale;
+  const sh = (visibleBottom - visibleY) / coverScale;
+  const canvas = document.createElement("canvas");
+  const scale = clamp(1600 / Math.max(sw, sh), 1, 3);
+  canvas.width = Math.round(sw * scale);
+  canvas.height = Math.round(sh * scale);
+  canvas.getContext("2d")?.drawImage(scannerVideo, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+  return canvas;
 }
 
 function scheduleAvailabilityCountdown(nextAvailableAt) {
@@ -1277,6 +1343,7 @@ scanButton.addEventListener("click", () => {
     scannerDialog.focus({ preventScroll: true });
     closeScannerButton.blur();
   });
+  startScannerCamera();
 });
 
 closeScannerButton.addEventListener("click", () => {
@@ -1294,20 +1361,18 @@ scannerDialog.addEventListener("cancel", (event) => {
   closeScannerDialog();
 });
 
-scannerFileInput.addEventListener("change", async () => {
-  const file = scannerFileInput.files?.[0];
-  scannerFileInput.value = "";
-
-  if (!file || isScanning) {
+captureScannerButton.addEventListener("click", async () => {
+  if (isScanning || !scannerStream) {
     return;
   }
 
   isScanning = true;
   scanButton.disabled = true;
   queryButton.disabled = true;
+  captureScannerButton.disabled = true;
 
   try {
-    const digits = await recognizeAccessCodeFromFile(file);
+    const digits = await recognizeAccessCodeFromCanvas(captureScannerFrame());
 
     if (!digits) {
       setScannerStatusKey("scannerNoCode");
@@ -1325,6 +1390,7 @@ scannerFileInput.addEventListener("change", async () => {
     isScanning = false;
     scanButton.disabled = false;
     queryButton.disabled = false;
+    captureScannerButton.disabled = !scannerStream;
   }
 });
 
@@ -1369,6 +1435,7 @@ function closeScannerDialog(options = {}) {
   }
 
   clearTimeout(scannerCloseTimer);
+  stopScannerCamera();
 
   if (options.immediate) {
     scannerDialog.classList.remove("is-closing");
