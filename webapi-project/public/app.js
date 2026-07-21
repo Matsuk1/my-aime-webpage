@@ -1,6 +1,7 @@
 const scoreForm = document.querySelector("#scoreForm");
 const queryButton = document.querySelector("#queryButton");
 const accessCodeInput = document.querySelector("#accessCodeInput");
+const scanButton = document.querySelector("#scanButton");
 const cmdTypeInput = document.querySelector("#cmdTypeInput");
 const languageSelect = document.querySelector("#languageSelect");
 const statusText = document.querySelector("#statusText");
@@ -9,14 +10,30 @@ const scoreResult = document.querySelector("#scoreResult");
 const scoreImage = document.querySelector("#scoreImage");
 const closeDialogButton = document.querySelector("#closeDialogButton");
 const downloadScoreButton = document.querySelector("#downloadScoreButton");
+const scannerDialog = document.querySelector("#scannerDialog");
+const closeScannerButton = document.querySelector("#closeScannerButton");
+const scannerFileInput = document.querySelector("#scannerFileInput");
+const scannerStatus = document.querySelector("#scannerStatus");
 let availabilityTimer = null;
 let scoreImageUrl = "";
 let isBusy = false;
+let isScanning = false;
 let currentLanguage = "zh-Hans";
 let resetViewportTimer = null;
 let dialogCloseTimer = null;
+let scannerCloseTimer = null;
+let openCvPromise = null;
+let tesseractPromise = null;
+let ocrWorker = null;
 const availabilityCacheKey = "maiscore-availability-cache";
 const availabilityCacheTtlMs = 60 * 1000;
+const codeCrops = [
+  { x: 42, y: 77.7, width: 56.5, height: 10.4 },
+  { x: 43, y: 82, width: 54.5, height: 9 },
+];
+const accessNumberCrop = { x: 1, y: 0, width: 98, height: 74 };
+const canonicalCardWidth = 1280;
+const canonicalCardHeight = 808;
 
 const messages = {
   "zh-Hans": {
@@ -25,6 +42,14 @@ const messages = {
     introLine2: "生成日服成绩图。",
     accessLabel: "Aime access code",
     queryButton: "查询",
+    scannerPick: "选择照片",
+    scannerReady: "将 ACCESS CODE 对准黄色框。",
+    scannerLoading: "加载识别内核...",
+    scannerDetecting: "检测卡片和 ACCESS CODE...",
+    scannerReading: "读取数字...",
+    scannerSuccess: "已识别并填入。",
+    scannerNoCode: "没有可靠识别到 20 位卡号，请换一张更清晰的照片。",
+    scannerFailed: "识别失败，请重新选择照片。",
     scoreTypeLabel: "成绩类型",
     waiting: "等待输入卡号。",
     queueCountdown: (seconds) => `等待 ${seconds}s。`,
@@ -52,6 +77,14 @@ const messages = {
     introLine2: "get a JP score card.",
     accessLabel: "Aime access code",
     queryButton: "Get score",
+    scannerPick: "Choose photo",
+    scannerReady: "Place ACCESS CODE inside the yellow frame.",
+    scannerLoading: "Loading scanner...",
+    scannerDetecting: "Detecting card and ACCESS CODE...",
+    scannerReading: "Reading digits...",
+    scannerSuccess: "Code filled.",
+    scannerNoCode: "Could not read a reliable 20-digit code. Try a clearer photo.",
+    scannerFailed: "Scan failed. Choose another photo.",
     scoreTypeLabel: "Score type",
     waiting: "Waiting for an Aime code.",
     queueCountdown: (seconds) => `Wait ${seconds}s.`,
@@ -79,6 +112,14 @@ const messages = {
     introLine2: "生成日服成績圖。",
     accessLabel: "Aime access code",
     queryButton: "查詢",
+    scannerPick: "選擇照片",
+    scannerReady: "將 ACCESS CODE 對準黃色框。",
+    scannerLoading: "載入識別核心...",
+    scannerDetecting: "偵測卡片與 ACCESS CODE...",
+    scannerReading: "讀取數字...",
+    scannerSuccess: "已識別並填入。",
+    scannerNoCode: "沒有可靠識別到 20 位卡號，請換一張更清晰的照片。",
+    scannerFailed: "識別失敗，請重新選擇照片。",
     scoreTypeLabel: "成績類型",
     waiting: "等待輸入卡號。",
     queueCountdown: (seconds) => `等待 ${seconds}s。`,
@@ -106,6 +147,14 @@ const messages = {
     introLine2: "일본 서버 성과 이미지를 생성하세요.",
     accessLabel: "Aime access code",
     queryButton: "조회",
+    scannerPick: "사진 선택",
+    scannerReady: "ACCESS CODE를 노란 프레임에 맞춰 주세요.",
+    scannerLoading: "스캐너 로딩 중...",
+    scannerDetecting: "카드와 ACCESS CODE 감지 중...",
+    scannerReading: "숫자 읽는 중...",
+    scannerSuccess: "번호가 입력되었습니다.",
+    scannerNoCode: "신뢰할 수 있는 20자리 번호를 읽지 못했습니다. 더 선명한 사진을 사용해 주세요.",
+    scannerFailed: "스캔 실패. 다른 사진을 선택해 주세요.",
     scoreTypeLabel: "성과 유형",
     waiting: "카드 번호 입력을 기다리는 중입니다.",
     queueCountdown: (seconds) => `${seconds}초 대기.`,
@@ -144,6 +193,12 @@ function setStatusKey(key, ...args) {
   setStatus(t(key, ...args));
 }
 
+function setScannerStatusKey(key, ...args) {
+  scannerStatus.dataset.scannerStatusKey = key;
+  scannerStatus.dataset.scannerStatusArgs = JSON.stringify(args);
+  scannerStatus.textContent = t(key, ...args);
+}
+
 function applyLanguage(language) {
   currentLanguage = messages[language] ? language : "zh-Hans";
   document.documentElement.lang = currentLanguage;
@@ -155,10 +210,17 @@ function applyLanguage(language) {
 
   closeDialogButton.setAttribute("aria-label", t("closeDialog"));
   downloadScoreButton.setAttribute("aria-label", t("downloadScore"));
+  closeScannerButton.setAttribute("aria-label", t("closeDialog"));
+  scanButton.setAttribute("aria-label", t("scannerPick"));
 
   if (statusText.dataset.statusKey) {
     const args = JSON.parse(statusText.dataset.statusArgs || "[]");
     setStatus(t(statusText.dataset.statusKey, ...args));
+  }
+
+  if (scannerStatus.dataset.scannerStatusKey) {
+    const args = JSON.parse(scannerStatus.dataset.scannerStatusArgs || "[]");
+    scannerStatus.textContent = t(scannerStatus.dataset.scannerStatusKey, ...args);
   }
 }
 
@@ -223,6 +285,832 @@ function formatAccessCode(value) {
   return normalizeAccessCode(value)
     .slice(0, 20)
     .replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function distance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function orderPoints(points) {
+  const bySum = [...points].sort((a, b) => a.x + a.y - (b.x + b.y));
+  const byDiff = [...points].sort((a, b) => a.y - a.x - (b.y - b.x));
+  return [bySum[0], byDiff[0], bySum[bySum.length - 1], byDiff[byDiff.length - 1]];
+}
+
+function rotateCanvas(source, degrees) {
+  const swapsSides = degrees === 90 || degrees === 270;
+  const canvas = document.createElement("canvas");
+  canvas.width = swapsSides ? source.height : source.width;
+  canvas.height = swapsSides ? source.width : source.height;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("Canvas unavailable");
+  }
+
+  context.translate(canvas.width / 2, canvas.height / 2);
+  context.rotate((degrees * Math.PI) / 180);
+  context.drawImage(source, -source.width / 2, -source.height / 2);
+  return canvas;
+}
+
+function cloneCanvas(source) {
+  const canvas = document.createElement("canvas");
+  canvas.width = source.width;
+  canvas.height = source.height;
+  canvas.getContext("2d")?.drawImage(source, 0, 0);
+  return canvas;
+}
+
+function loadScript(src, marker) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[data-loader="${marker}"]`);
+
+    if (existing) {
+      existing.addEventListener("load", resolve, { once: true });
+      existing.addEventListener("error", reject, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.dataset.loader = marker;
+    script.onload = resolve;
+    script.onerror = () => reject(new Error(`${marker} load failed`));
+    document.head.appendChild(script);
+  });
+}
+
+async function loadOpenCv() {
+  if (openCvPromise) return openCvPromise;
+
+  openCvPromise = new Promise((resolve, reject) => {
+    const finish = async () => {
+      try {
+        const candidate = await Promise.resolve(window.cv);
+
+        if (!candidate) {
+          throw new Error("OpenCV unavailable");
+        }
+
+        if (candidate.Mat) {
+          resolve(candidate);
+          return;
+        }
+
+        candidate.onRuntimeInitialized = () => resolve(candidate);
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    if (window.cv) {
+      finish();
+      return;
+    }
+
+    loadScript(
+      "https://cdn.jsdelivr.net/npm/@techstark/opencv-js@5.0.0-release.1/dist/opencv.js",
+      "opencv",
+    )
+      .then(finish)
+      .catch(reject);
+  });
+
+  return openCvPromise;
+}
+
+async function loadTesseract() {
+  if (tesseractPromise) return tesseractPromise;
+
+  tesseractPromise = loadScript(
+    "https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js",
+    "tesseract",
+  ).then(() => {
+    if (!window.Tesseract) {
+      throw new Error("Tesseract unavailable");
+    }
+
+    return window.Tesseract;
+  });
+
+  return tesseractPromise;
+}
+
+function warpCard(sourceCanvas, cv, points) {
+  const ordered = orderPoints(points);
+  const topWidth = distance(ordered[0], ordered[1]);
+  const bottomWidth = distance(ordered[3], ordered[2]);
+  const leftHeight = distance(ordered[0], ordered[3]);
+  const rightHeight = distance(ordered[1], ordered[2]);
+  const measuredWidth = Math.max(topWidth, bottomWidth);
+  const measuredHeight = Math.max(leftHeight, rightHeight);
+  const portrait = measuredHeight > measuredWidth;
+  const outputWidth = portrait ? canonicalCardHeight : canonicalCardWidth;
+  const outputHeight = portrait ? canonicalCardWidth : canonicalCardHeight;
+  const source = cv.imread(sourceCanvas);
+  const destination = new cv.Mat();
+  const opaqueDestination = new cv.Mat();
+  const sourcePoints = cv.matFromArray(4, 1, cv.CV_32FC2, ordered.flatMap((point) => [point.x, point.y]));
+  const destinationPoints = cv.matFromArray(4, 1, cv.CV_32FC2, [
+    0,
+    0,
+    outputWidth - 1,
+    0,
+    outputWidth - 1,
+    outputHeight - 1,
+    0,
+    outputHeight - 1,
+  ]);
+  const transform = cv.getPerspectiveTransform(sourcePoints, destinationPoints);
+
+  cv.warpPerspective(
+    source,
+    destination,
+    transform,
+    new cv.Size(outputWidth, outputHeight),
+    cv.INTER_LINEAR,
+    cv.BORDER_REPLICATE,
+  );
+  cv.cvtColor(destination, opaqueDestination, cv.COLOR_RGBA2RGB);
+
+  const canvas = document.createElement("canvas");
+  cv.imshow(canvas, opaqueDestination);
+  source.delete();
+  destination.delete();
+  opaqueDestination.delete();
+  sourcePoints.delete();
+  destinationPoints.delete();
+  transform.delete();
+
+  return portrait ? rotateCanvas(canvas, 90) : canvas;
+}
+
+function normalizeCardSize(source) {
+  const landscape = source.width >= source.height ? source : rotateCanvas(source, 90);
+  const canvas = document.createElement("canvas");
+  canvas.width = canonicalCardWidth;
+  canvas.height = canonicalCardHeight;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("Canvas unavailable");
+  }
+
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(landscape, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+function warpWideRegion(sourceCanvas, cv, points) {
+  let ordered = orderPoints(points);
+  let measuredWidth = Math.max(distance(ordered[0], ordered[1]), distance(ordered[3], ordered[2]));
+  let measuredHeight = Math.max(distance(ordered[0], ordered[3]), distance(ordered[1], ordered[2]));
+
+  if (measuredHeight > measuredWidth) {
+    ordered = [ordered[3], ordered[0], ordered[1], ordered[2]];
+    [measuredWidth, measuredHeight] = [measuredHeight, measuredWidth];
+  }
+
+  const outputWidth = clamp(Math.round(measuredWidth), 1000, 1600);
+  const outputHeight = Math.max(100, Math.round((outputWidth * measuredHeight) / measuredWidth));
+  const source = cv.imread(sourceCanvas);
+  const destination = new cv.Mat();
+  const opaqueDestination = new cv.Mat();
+  const sourcePoints = cv.matFromArray(4, 1, cv.CV_32FC2, ordered.flatMap((point) => [point.x, point.y]));
+  const destinationPoints = cv.matFromArray(4, 1, cv.CV_32FC2, [
+    0,
+    0,
+    outputWidth - 1,
+    0,
+    outputWidth - 1,
+    outputHeight - 1,
+    0,
+    outputHeight - 1,
+  ]);
+  const transform = cv.getPerspectiveTransform(sourcePoints, destinationPoints);
+
+  cv.warpPerspective(
+    source,
+    destination,
+    transform,
+    new cv.Size(outputWidth, outputHeight),
+    cv.INTER_LINEAR,
+    cv.BORDER_REPLICATE,
+  );
+  cv.cvtColor(destination, opaqueDestination, cv.COLOR_RGBA2RGB);
+
+  const canvas = document.createElement("canvas");
+  cv.imshow(canvas, opaqueDestination);
+  source.delete();
+  destination.delete();
+  opaqueDestination.delete();
+  sourcePoints.delete();
+  destinationPoints.delete();
+  transform.delete();
+  return canvas;
+}
+
+function scoreAccessCodeBoxes(warped, cv) {
+  const grey = new cv.Mat();
+  const binary = new cv.Mat();
+  const contours = new cv.MatVector();
+  const hierarchy = new cv.Mat();
+  const boxes = [];
+
+  try {
+    cv.cvtColor(warped, grey, cv.COLOR_RGBA2GRAY);
+    cv.adaptiveThreshold(grey, binary, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 31, 4);
+    cv.findContours(binary, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+
+    for (let index = 0; index < contours.size(); index += 1) {
+      const contour = contours.get(index);
+      const rect = cv.boundingRect(contour);
+      const area = Math.abs(cv.contourArea(contour));
+      const widthRatio = rect.width / warped.cols;
+      const heightRatio = rect.height / warped.rows;
+      const aspect = rect.width / Math.max(1, rect.height);
+      const fill = area / Math.max(1, rect.width * rect.height);
+
+      if (
+        widthRatio >= 0.018 &&
+        widthRatio <= 0.075 &&
+        heightRatio >= 0.12 &&
+        heightRatio <= 0.48 &&
+        aspect >= 0.42 &&
+        aspect <= 1.3 &&
+        fill >= 0.45
+      ) {
+        boxes.push({
+          x: rect.x + rect.width / 2,
+          y: rect.y + rect.height / 2,
+          width: rect.width,
+        });
+      }
+
+      contour.delete();
+    }
+
+    let bestAligned = 0;
+    let bestScore = 0;
+
+    for (const seed of boxes) {
+      const row = boxes.filter((box) => Math.abs(box.y - seed.y) < warped.rows * 0.11).sort((a, b) => a.x - b.x);
+      const widths = row.map((box) => box.width).sort((a, b) => a - b);
+      const medianWidth = widths[Math.floor(widths.length / 2)] || 1;
+      const consistent = row.filter((box) => box.width > medianWidth * 0.55 && box.width < medianWidth * 1.65);
+      const unique = [];
+
+      for (const box of consistent) {
+        const previous = unique[unique.length - 1];
+        if (!previous || Math.abs(box.x - previous.x) > medianWidth * 0.65) {
+          unique.push(box);
+        }
+      }
+
+      const gaps = unique.slice(1).map((box, index) => box.x - unique[index].x);
+      const sortedGaps = [...gaps].sort((a, b) => a - b);
+      const medianGap = sortedGaps[Math.floor(sortedGaps.length / 2)] || 1;
+      const regularGaps = gaps.filter((gap) => gap > medianGap * 0.55 && gap < medianGap * 1.45).length;
+      const aligned = unique.length;
+      const countScore = Math.max(0, 10 - Math.abs(10 - aligned)) * 5;
+      const spacingScore = gaps.length ? (regularGaps / gaps.length) * 20 : 0;
+      const score = countScore + spacingScore;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestAligned = aligned;
+      }
+    }
+
+    return { aligned: bestAligned, score: bestScore };
+  } finally {
+    grey.delete();
+    binary.delete();
+    contours.delete();
+    hierarchy.delete();
+  }
+}
+
+function detectAccessCodeRegion(sourceCanvas, cv) {
+  const longestSide = Math.max(sourceCanvas.width, sourceCanvas.height);
+  const detectionScale = Math.min(1, 1600 / longestSide);
+  const detectionCanvas = document.createElement("canvas");
+  detectionCanvas.width = Math.round(sourceCanvas.width * detectionScale);
+  detectionCanvas.height = Math.round(sourceCanvas.height * detectionScale);
+  detectionCanvas.getContext("2d")?.drawImage(sourceCanvas, 0, 0, detectionCanvas.width, detectionCanvas.height);
+
+  const source = cv.imread(detectionCanvas);
+  const grey = new cv.Mat();
+  const blurred = new cv.Mat();
+  const edges = new cv.Mat();
+  const closed = new cv.Mat();
+  const contours = new cv.MatVector();
+  const hierarchy = new cv.Mat();
+  const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+  const candidates = [];
+
+  try {
+    cv.cvtColor(source, grey, cv.COLOR_RGBA2GRAY);
+    cv.GaussianBlur(grey, blurred, new cv.Size(3, 3), 0);
+    cv.Canny(blurred, edges, 30, 110);
+    cv.morphologyEx(edges, closed, cv.MORPH_CLOSE, kernel);
+    cv.findContours(closed, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+
+    const imageArea = detectionCanvas.width * detectionCanvas.height;
+
+    for (let index = 0; index < contours.size(); index += 1) {
+      const contour = contours.get(index);
+      const area = Math.abs(cv.contourArea(contour));
+      const areaRatio = area / imageArea;
+
+      if (areaRatio < 0.0015 || areaRatio > 0.12) {
+        contour.delete();
+        continue;
+      }
+
+      const perimeter = cv.arcLength(contour, true);
+      const approx = new cv.Mat();
+      cv.approxPolyDP(contour, approx, perimeter * 0.02, true);
+
+      if (approx.rows === 4 && cv.isContourConvex(approx)) {
+        const points = Array.from({ length: 4 }, (_, pointIndex) => ({
+          x: approx.data32S[pointIndex * 2],
+          y: approx.data32S[pointIndex * 2 + 1],
+        }));
+        const ordered = orderPoints(points);
+        const width = Math.max(distance(ordered[0], ordered[1]), distance(ordered[3], ordered[2]));
+        const height = Math.max(distance(ordered[0], ordered[3]), distance(ordered[1], ordered[2]));
+        const ratio = Math.max(width, height) / Math.max(1, Math.min(width, height));
+
+        if (ratio >= 3.4 && ratio <= 8) {
+          const warpedCanvas = warpWideRegion(detectionCanvas, cv, points);
+          const warped = cv.imread(warpedCanvas);
+          const structure = scoreAccessCodeBoxes(warped, cv);
+          warped.delete();
+
+          if (structure.aligned >= 8 && structure.aligned <= 12 && structure.score >= 55) {
+            candidates.push({
+              points: points.map((point) => ({
+                x: point.x / detectionScale,
+                y: point.y / detectionScale,
+              })),
+              area,
+              ...structure,
+            });
+          }
+        }
+      }
+
+      approx.delete();
+      contour.delete();
+    }
+  } finally {
+    source.delete();
+    grey.delete();
+    blurred.delete();
+    edges.delete();
+    closed.delete();
+    contours.delete();
+    hierarchy.delete();
+    kernel.delete();
+  }
+
+  if (!candidates.length) return null;
+
+  const highestScore = Math.max(...candidates.map((candidate) => candidate.score));
+  const best = candidates
+    .filter((candidate) => candidate.score >= highestScore - 8)
+    .sort((a, b) => b.area - a.area)[0];
+
+  return {
+    canvas: warpWideRegion(sourceCanvas, cv, best.points),
+    alignedBoxes: best.aligned,
+  };
+}
+
+function detectCard(sourceCanvas, cv) {
+  const longestSide = Math.max(sourceCanvas.width, sourceCanvas.height);
+  const detectionScale = Math.min(1, 1200 / longestSide);
+  const detectionCanvas = document.createElement("canvas");
+  detectionCanvas.width = Math.round(sourceCanvas.width * detectionScale);
+  detectionCanvas.height = Math.round(sourceCanvas.height * detectionScale);
+  detectionCanvas.getContext("2d")?.drawImage(sourceCanvas, 0, 0, detectionCanvas.width, detectionCanvas.height);
+
+  const source = cv.imread(detectionCanvas);
+  const grey = new cv.Mat();
+  const blurred = new cv.Mat();
+  const edges = new cv.Mat();
+  const closed = new cv.Mat();
+  const contours = new cv.MatVector();
+  const hierarchy = new cv.Mat();
+  const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(7, 7));
+  let bestQuad = null;
+  let bestQuadArea = 0;
+  let fallbackContour = null;
+  let fallbackArea = 0;
+
+  try {
+    cv.cvtColor(source, grey, cv.COLOR_RGBA2GRAY);
+    cv.GaussianBlur(grey, blurred, new cv.Size(5, 5), 0);
+    cv.Canny(blurred, edges, 45, 145);
+    cv.morphologyEx(edges, closed, cv.MORPH_CLOSE, kernel);
+    cv.findContours(closed, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+
+    const imageArea = detectionCanvas.width * detectionCanvas.height;
+
+    for (let index = 0; index < contours.size(); index += 1) {
+      const contour = contours.get(index);
+      const area = Math.abs(cv.contourArea(contour));
+
+      if (area < imageArea * 0.1 || area > imageArea * 0.985) {
+        contour.delete();
+        continue;
+      }
+
+      if (area > fallbackArea) {
+        fallbackContour?.delete();
+        fallbackContour = contour.clone();
+        fallbackArea = area;
+      }
+
+      const perimeter = cv.arcLength(contour, true);
+      const approx = new cv.Mat();
+      cv.approxPolyDP(contour, approx, perimeter * 0.025, true);
+
+      if (approx.rows === 4 && cv.isContourConvex(approx) && area > bestQuadArea) {
+        const points = [];
+
+        for (let pointIndex = 0; pointIndex < 4; pointIndex += 1) {
+          points.push({
+            x: approx.data32S[pointIndex * 2] / detectionScale,
+            y: approx.data32S[pointIndex * 2 + 1] / detectionScale,
+          });
+        }
+
+        const ordered = orderPoints(points);
+        const width = Math.max(distance(ordered[0], ordered[1]), distance(ordered[3], ordered[2]));
+        const height = Math.max(distance(ordered[0], ordered[3]), distance(ordered[1], ordered[2]));
+        const ratio = Math.max(width, height) / Math.max(1, Math.min(width, height));
+
+        if (ratio >= 1.25 && ratio <= 1.9) {
+          bestQuad = points;
+          bestQuadArea = area;
+        }
+      }
+
+      approx.delete();
+      contour.delete();
+    }
+
+    if (!bestQuad && fallbackContour && fallbackArea > imageArea * 0.1) {
+      const rect = cv.minAreaRect(fallbackContour);
+      const rectPoints = cv.RotatedRect.points(rect);
+      const ratio = Math.max(rect.size.width, rect.size.height) / Math.max(1, Math.min(rect.size.width, rect.size.height));
+
+      if (ratio >= 1.2 && ratio <= 2) {
+        bestQuad = rectPoints.map((point) => ({
+          x: point.x / detectionScale,
+          y: point.y / detectionScale,
+        }));
+      }
+    }
+  } finally {
+    fallbackContour?.delete();
+    source.delete();
+    grey.delete();
+    blurred.delete();
+    edges.delete();
+    closed.delete();
+    contours.delete();
+    hierarchy.delete();
+    kernel.delete();
+  }
+
+  if (!bestQuad) return null;
+  return { canvas: warpCard(sourceCanvas, cv, bestQuad) };
+}
+
+function wholeImageFallback(source) {
+  const landscape = source.width >= source.height ? cloneCanvas(source) : rotateCanvas(source, 270);
+  const ratio = landscape.width / landscape.height;
+
+  if (ratio <= 2.05) return landscape;
+
+  const canvas = document.createElement("canvas");
+  const targetRatio = 1.6;
+  canvas.height = landscape.height;
+  canvas.width = Math.round(landscape.height * targetRatio);
+  const context = canvas.getContext("2d");
+
+  if (!context) return landscape;
+
+  context.drawImage(
+    landscape,
+    Math.max(0, (landscape.width - canvas.width) / 2),
+    0,
+    Math.min(canvas.width, landscape.width),
+    landscape.height,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+  return canvas;
+}
+
+function otsuThreshold(histogram, total) {
+  let sum = 0;
+
+  for (let i = 0; i < 256; i += 1) {
+    sum += i * histogram[i];
+  }
+
+  let backgroundWeight = 0;
+  let backgroundSum = 0;
+  let bestVariance = 0;
+  let threshold = 128;
+
+  for (let i = 0; i < 256; i += 1) {
+    backgroundWeight += histogram[i];
+    if (!backgroundWeight) continue;
+    const foregroundWeight = total - backgroundWeight;
+    if (!foregroundWeight) break;
+    backgroundSum += i * histogram[i];
+    const backgroundMean = backgroundSum / backgroundWeight;
+    const foregroundMean = (sum - backgroundSum) / foregroundWeight;
+    const variance = backgroundWeight * foregroundWeight * (backgroundMean - foregroundMean) ** 2;
+
+    if (variance > bestVariance) {
+      bestVariance = variance;
+      threshold = i;
+    }
+  }
+
+  return threshold;
+}
+
+function prepareCrop(source, crop, binary) {
+  const sx = Math.round((crop.x / 100) * source.width);
+  const sy = Math.round((crop.y / 100) * source.height);
+  const sw = Math.max(1, Math.round((crop.width / 100) * source.width));
+  const sh = Math.max(1, Math.round((crop.height / 100) * source.height));
+  const scale = clamp(1500 / sw, 1.5, 4);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(sw * scale);
+  canvas.height = Math.round(sh * scale);
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+
+  if (!context) {
+    throw new Error("Canvas unavailable");
+  }
+
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+  const image = context.getImageData(0, 0, canvas.width, canvas.height);
+  const histogram = new Uint32Array(256);
+  const greys = new Uint8Array(canvas.width * canvas.height);
+  let mean = 0;
+
+  for (let pixel = 0, index = 0; pixel < image.data.length; pixel += 4, index += 1) {
+    const grey = Math.round(image.data[pixel] * 0.299 + image.data[pixel + 1] * 0.587 + image.data[pixel + 2] * 0.114);
+    greys[index] = grey;
+    histogram[grey] += 1;
+    mean += grey;
+  }
+
+  const total = greys.length;
+  const invert = mean / total < 128;
+  let low = 0;
+  let high = 255;
+  let seen = 0;
+
+  for (let i = 0; i < 256; i += 1) {
+    seen += histogram[i];
+    if (seen < total * 0.02) low = i;
+    if (seen < total * 0.98) high = i;
+  }
+
+  const range = Math.max(24, high - low);
+  const normalized = new Uint8Array(total);
+  const normalizedHistogram = new Uint32Array(256);
+
+  for (let index = 0; index < total; index += 1) {
+    let value = clamp(Math.round(((greys[index] - low) / range) * 255), 0, 255);
+    if (invert) value = 255 - value;
+    normalized[index] = value;
+    normalizedHistogram[value] += 1;
+  }
+
+  const threshold = otsuThreshold(normalizedHistogram, total);
+
+  for (let pixel = 0, index = 0; pixel < image.data.length; pixel += 4, index += 1) {
+    const value = binary ? (normalized[index] < threshold ? 0 : 255) : normalized[index];
+    image.data[pixel] = value;
+    image.data[pixel + 1] = value;
+    image.data[pixel + 2] = value;
+    image.data[pixel + 3] = 255;
+  }
+
+  context.putImageData(image, 0, 0);
+
+  const padded = document.createElement("canvas");
+  padded.width = canvas.width + 100;
+  padded.height = canvas.height + 48;
+  const paddedContext = padded.getContext("2d");
+
+  if (!paddedContext) return canvas;
+
+  paddedContext.fillStyle = "#ffffff";
+  paddedContext.fillRect(0, 0, padded.width, padded.height);
+  paddedContext.drawImage(canvas, 50, 24);
+  return padded;
+}
+
+function splitIntoCodeGroups(source) {
+  const outerPadding = 50;
+  const contentWidth = source.width - outerPadding * 2;
+  const groupWidth = contentWidth / 5;
+
+  return Array.from({ length: 5 }, (_, index) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(groupWidth) + 24;
+    canvas.height = source.height;
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("Canvas unavailable");
+    }
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(source, outerPadding + index * groupWidth, 0, groupWidth, source.height, 12, 0, groupWidth, source.height);
+    return canvas;
+  });
+}
+
+function scoreCandidate(candidate) {
+  if (candidate.digits.length === 20) return -10000 - candidate.confidence;
+  return Math.abs(candidate.digits.length - 20) * 100 - candidate.confidence;
+}
+
+function imageFileToCanvas(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      const scale = Math.min(1, 2200 / Math.max(image.naturalWidth, image.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.naturalWidth * scale);
+      canvas.height = Math.round(image.naturalHeight * scale);
+      canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Image decode failed"));
+    };
+
+    image.src = url;
+  });
+}
+
+async function ensureOcrWorker(tesseract) {
+  if (ocrWorker) return ocrWorker;
+
+  ocrWorker = await tesseract.createWorker("eng", tesseract.OEM.LSTM_ONLY, {
+    workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/worker.min.js",
+    corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@7.0.0",
+    langPath: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int",
+    gzip: true,
+  });
+
+  await ocrWorker.setParameters({
+    tessedit_pageseg_mode: tesseract.PSM.RAW_LINE,
+    tessedit_char_whitelist: "0123456789 ",
+    preserve_interword_spaces: "1",
+    user_defined_dpi: "300",
+  });
+
+  return ocrWorker;
+}
+
+async function recognizeAccessCodeFromFile(file) {
+  setScannerStatusKey("scannerLoading");
+  const [cv, tesseract, sourceCanvas] = await Promise.all([loadOpenCv(), loadTesseract(), imageFileToCanvas(file)]);
+  const worker = await ensureOcrWorker(tesseract);
+  setScannerStatusKey("scannerDetecting");
+
+  const detection = detectCard(sourceCanvas, cv);
+  const normalizedCard = normalizeCardSize(detection?.canvas || wholeImageFallback(sourceCanvas));
+  let best = null;
+  let successful = false;
+  let groupReviewSource = null;
+  let groupReviewScore = Number.POSITIVE_INFINITY;
+
+  const recognizeLine = async (prepared) => {
+    setScannerStatusKey("scannerReading");
+    const result = await worker.recognize(prepared);
+    const candidate = {
+      text: result.data.text.trim(),
+      digits: result.data.text.replace(/\D/g, ""),
+      confidence: result.data.confidence,
+    };
+
+    if (!best || scoreCandidate(candidate) < scoreCandidate(best)) {
+      best = candidate;
+    }
+
+    if (candidate.digits.length >= 15 && candidate.digits.length < 20 && scoreCandidate(candidate) < groupReviewScore) {
+      groupReviewSource = prepared;
+      groupReviewScore = scoreCandidate(candidate);
+    }
+
+    if (candidate.digits.length === 20) {
+      successful = true;
+      return true;
+    }
+
+    return false;
+  };
+
+  if (detection) {
+    const orientations = [normalizedCard, rotateCanvas(normalizedCard, 180)];
+
+    fixedLayout: for (const binary of [false, true]) {
+      for (const orientation of orientations) {
+        for (const crop of codeCrops) {
+          if (await recognizeLine(prepareCrop(orientation, crop, binary))) {
+            break fixedLayout;
+          }
+        }
+      }
+    }
+  }
+
+  if (!successful) {
+    const accessRegions = [
+      detection ? detectAccessCodeRegion(normalizedCard, cv) : null,
+      detectAccessCodeRegion(sourceCanvas, cv),
+    ]
+      .filter(Boolean)
+      .sort((a, b) => b.alignedBoxes - a.alignedBoxes)
+      .slice(0, 2);
+
+    anchorSearch: for (const accessRegion of accessRegions) {
+      for (const orientation of [accessRegion.canvas, rotateCanvas(accessRegion.canvas, 180)]) {
+        if (await recognizeLine(prepareCrop(orientation, accessNumberCrop, false))) {
+          break anchorSearch;
+        }
+      }
+    }
+  }
+
+  if (!successful && groupReviewSource) {
+    await worker.setParameters({
+      tessedit_pageseg_mode: tesseract.PSM.SINGLE_WORD,
+    });
+
+    try {
+      const groupResults = [];
+
+      for (const group of splitIntoCodeGroups(groupReviewSource)) {
+        const result = await worker.recognize(group);
+        groupResults.push({
+          text: result.data.text.trim(),
+          digits: result.data.text.replace(/\D/g, ""),
+          confidence: result.data.confidence,
+        });
+      }
+
+      const grouped = {
+        text: groupResults.map((group) => group.text).join(" "),
+        digits: groupResults.map((group) => group.digits).join(""),
+        confidence: groupResults.reduce((sum, group) => sum + group.confidence, 0) / groupResults.length,
+      };
+
+      if (!best || scoreCandidate(grouped) < scoreCandidate(best)) {
+        best = grouped;
+      }
+    } finally {
+      await worker.setParameters({
+        tessedit_pageseg_mode: tesseract.PSM.RAW_LINE,
+      });
+    }
+  }
+
+  return best?.digits.length === 20 ? best.digits : "";
 }
 
 function scheduleAvailabilityCountdown(nextAvailableAt) {
@@ -378,6 +1266,68 @@ languageSelect.addEventListener("change", () => {
   applyLanguage(languageSelect.value);
 });
 
+scanButton.addEventListener("click", () => {
+  if (isBusy || isScanning) {
+    return;
+  }
+
+  setScannerStatusKey("scannerReady");
+  scannerDialog.showModal();
+  requestAnimationFrame(() => {
+    scannerDialog.focus({ preventScroll: true });
+    closeScannerButton.blur();
+  });
+});
+
+closeScannerButton.addEventListener("click", () => {
+  closeScannerDialog();
+});
+
+scannerDialog.addEventListener("click", (event) => {
+  if (event.target === scannerDialog) {
+    closeScannerDialog();
+  }
+});
+
+scannerDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeScannerDialog();
+});
+
+scannerFileInput.addEventListener("change", async () => {
+  const file = scannerFileInput.files?.[0];
+  scannerFileInput.value = "";
+
+  if (!file || isScanning) {
+    return;
+  }
+
+  isScanning = true;
+  scanButton.disabled = true;
+  queryButton.disabled = true;
+
+  try {
+    const digits = await recognizeAccessCodeFromFile(file);
+
+    if (!digits) {
+      setScannerStatusKey("scannerNoCode");
+      return;
+    }
+
+    accessCodeInput.value = formatAccessCode(digits);
+    setScannerStatusKey("scannerSuccess");
+    setStatusKey("waiting");
+    window.setTimeout(() => closeScannerDialog(), 260);
+  } catch (error) {
+    console.warn("Scanner failed:", error);
+    setScannerStatusKey("scannerFailed");
+  } finally {
+    isScanning = false;
+    scanButton.disabled = false;
+    queryButton.disabled = false;
+  }
+});
+
 closeDialogButton.addEventListener("click", () => {
   closeScoreDialog();
 });
@@ -413,6 +1363,26 @@ function closeScoreDialog(options = {}) {
   }, 180);
 }
 
+function closeScannerDialog(options = {}) {
+  if (!scannerDialog.open || isScanning) {
+    return;
+  }
+
+  clearTimeout(scannerCloseTimer);
+
+  if (options.immediate) {
+    scannerDialog.classList.remove("is-closing");
+    scannerDialog.close();
+    return;
+  }
+
+  scannerDialog.classList.add("is-closing");
+  scannerCloseTimer = setTimeout(() => {
+    scannerDialog.classList.remove("is-closing");
+    scannerDialog.close();
+  }, 190);
+}
+
 scoreForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -426,6 +1396,7 @@ scoreForm.addEventListener("submit", async (event) => {
 
   isBusy = true;
   queryButton.disabled = true;
+  scanButton.disabled = true;
   clearAvailabilityTimer();
   clearAvailabilityCache();
   clearScoreImage();
@@ -481,6 +1452,7 @@ scoreForm.addEventListener("submit", async (event) => {
   } finally {
     isBusy = false;
     queryButton.disabled = false;
+    scanButton.disabled = false;
   }
 });
 

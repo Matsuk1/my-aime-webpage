@@ -50,12 +50,15 @@
                 name="aimeAccessCode"
                 type="text"
                 inputmode="numeric"
-                autocomplete="one-time-code"
+                autocomplete="off"
                 autocapitalize="off"
                 spellcheck="false"
                 maxlength="24"
                 placeholder="0000 0000 0000 0000 0000"
               />
+              <button id="scanButton" class="scan-button" type="button" aria-label="Scan card">
+                <span aria-hidden="true">▣</span>
+              </button>
               <button id="queryButton" class="primary-button" type="submit">
                 <span data-i18n="queryButton">查询</span>
               </button>
@@ -102,6 +105,27 @@
       <figure id="scoreResult" class="score-result">
         <img id="scoreImage" alt="日服成绩图" />
       </figure>
+    </dialog>
+
+    <dialog id="scannerDialog" class="scanner-dialog" aria-label="Scan Aime card" tabindex="-1">
+      <div class="scanner-sheet">
+        <div class="scanner-handle" aria-hidden="true"></div>
+        <div class="scanner-toolbar">
+          <button id="closeScannerButton" class="scanner-close" type="button" aria-label="Close">×</button>
+          <p id="scannerStatus" data-scanner-status-key="scannerReady">将 ACCESS CODE 对准黄色框。</p>
+          <label class="scanner-pick">
+            <input id="scannerFileInput" type="file" accept="image/*" capture="environment" />
+            <span data-i18n="scannerPick">选择照片</span>
+          </label>
+        </div>
+        <div class="scanner-stage">
+          <div class="scanner-card-frame">
+            <div class="scanner-access-frame">
+              <span>ACCESS CODE</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </dialog>
 
     <script src="./app.js"></script>
