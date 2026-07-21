@@ -29,6 +29,7 @@ let tesseractPromise = null;
 let ocrWorker = null;
 let scannerStream = null;
 let scannerCameraRequestId = 0;
+let scannerAutoTimer = null;
 const availabilityCacheKey = "maiscore-availability-cache";
 const availabilityCacheTtlMs = 60 * 1000;
 const codeCrops = [
@@ -50,6 +51,7 @@ const messages = {
     scannerReady: "将 ACCESS CODE 对准黄色框。",
     scannerCameraStarting: "正在启动摄像头...",
     scannerCameraFailed: "无法访问摄像头，请检查浏览器权限。",
+    scannerAutoScanning: "自动识别中...",
     scannerLoading: "加载识别内核...",
     scannerDetecting: "检测卡片和 ACCESS CODE...",
     scannerReading: "读取数字...",
@@ -87,6 +89,7 @@ const messages = {
     scannerReady: "Place ACCESS CODE inside the yellow frame.",
     scannerCameraStarting: "Starting camera...",
     scannerCameraFailed: "Could not access the camera. Check browser permission.",
+    scannerAutoScanning: "Scanning automatically...",
     scannerLoading: "Loading scanner...",
     scannerDetecting: "Detecting card and ACCESS CODE...",
     scannerReading: "Reading digits...",
@@ -124,6 +127,7 @@ const messages = {
     scannerReady: "將 ACCESS CODE 對準黃色框。",
     scannerCameraStarting: "正在啟動攝影機...",
     scannerCameraFailed: "無法存取攝影機，請檢查瀏覽器權限。",
+    scannerAutoScanning: "自動識別中...",
     scannerLoading: "載入識別核心...",
     scannerDetecting: "偵測卡片與 ACCESS CODE...",
     scannerReading: "讀取數字...",
@@ -161,6 +165,7 @@ const messages = {
     scannerReady: "ACCESS CODE를 노란 프레임에 맞춰 주세요.",
     scannerCameraStarting: "카메라 시작 중...",
     scannerCameraFailed: "카메라에 접근할 수 없습니다. 브라우저 권한을 확인해 주세요.",
+    scannerAutoScanning: "자동 스캔 중...",
     scannerLoading: "스캐너 로딩 중...",
     scannerDetecting: "카드와 ACCESS CODE 감지 중...",
     scannerReading: "숫자 읽는 중...",
@@ -1103,6 +1108,7 @@ async function recognizeAccessCodeFromCanvas(sourceCanvas) {
 
 function stopScannerCamera() {
   scannerCameraRequestId += 1;
+  clearScannerAutoScan();
   scannerStream?.getTracks().forEach((track) => track.stop());
   scannerStream = null;
   scannerVideo.srcObject = null;
@@ -1141,6 +1147,7 @@ async function startScannerCamera() {
     await scannerVideo.play();
     captureScannerButton.disabled = false;
     setScannerStatusKey("scannerReady");
+    scheduleScannerAutoScan(400);
   } catch (error) {
     console.warn("Camera start failed:", error);
     stopScannerCamera();
@@ -1198,6 +1205,60 @@ function unfreezeScannerFrame() {
   document.querySelector(".scanner-stage")?.classList.remove("is-frozen");
   const context = scannerFreezeCanvas.getContext("2d");
   context?.clearRect(0, 0, scannerFreezeCanvas.width, scannerFreezeCanvas.height);
+}
+
+function clearScannerAutoScan() {
+  clearTimeout(scannerAutoTimer);
+  scannerAutoTimer = null;
+}
+
+function scheduleScannerAutoScan(delay = 1300) {
+  clearScannerAutoScan();
+
+  if (!scannerDialog.open || !scannerStream) {
+    return;
+  }
+
+  scannerAutoTimer = setTimeout(runScannerAutoScan, delay);
+}
+
+async function runScannerAutoScan() {
+  if (isScanning || !scannerDialog.open || !scannerStream) {
+    return;
+  }
+
+  isScanning = true;
+  scanButton.disabled = true;
+  queryButton.disabled = true;
+  captureScannerButton.disabled = true;
+  setScannerStatusKey("scannerAutoScanning");
+
+  try {
+    const digits = await recognizeAccessCodeFromCanvas(captureScannerFrame());
+
+    if (!digits) {
+      setScannerStatusKey("scannerReady");
+      return;
+    }
+
+    freezeScannerFrame();
+    accessCodeInput.value = formatAccessCode(digits);
+    setScannerStatusKey("scannerSuccess");
+    setStatusKey("waiting");
+    window.setTimeout(() => closeScannerDialog(), 260);
+  } catch (error) {
+    console.warn("Auto scanner failed:", error);
+    setScannerStatusKey("scannerFailed");
+  } finally {
+    isScanning = false;
+    scanButton.disabled = false;
+    queryButton.disabled = false;
+    captureScannerButton.disabled = !scannerStream;
+
+    if (scannerDialog.open && scannerStream) {
+      scheduleScannerAutoScan();
+    }
+  }
 }
 
 function scheduleAvailabilityCountdown(nextAvailableAt) {
@@ -1393,47 +1454,6 @@ scannerDialog.addEventListener("cancel", (event) => {
   closeScannerDialog();
 });
 
-captureScannerButton.addEventListener("click", async () => {
-  if (isScanning || !scannerStream) {
-    return;
-  }
-
-  isScanning = true;
-  scanButton.disabled = true;
-  queryButton.disabled = true;
-  captureScannerButton.disabled = true;
-  let shouldResumePreview = true;
-
-  try {
-    const scannerFrame = captureScannerFrame();
-    freezeScannerFrame();
-    const digits = await recognizeAccessCodeFromCanvas(scannerFrame);
-
-    if (!digits) {
-      setScannerStatusKey("scannerNoCode");
-      return;
-    }
-
-    accessCodeInput.value = formatAccessCode(digits);
-    setScannerStatusKey("scannerSuccess");
-    setStatusKey("waiting");
-    shouldResumePreview = false;
-    window.setTimeout(() => closeScannerDialog(), 260);
-  } catch (error) {
-    console.warn("Scanner failed:", error);
-    setScannerStatusKey("scannerFailed");
-  } finally {
-    if (shouldResumePreview) {
-      unfreezeScannerFrame();
-    }
-
-    isScanning = false;
-    scanButton.disabled = false;
-    queryButton.disabled = false;
-    captureScannerButton.disabled = !scannerStream;
-  }
-});
-
 closeDialogButton.addEventListener("click", () => {
   closeScoreDialog();
 });
@@ -1472,7 +1492,7 @@ function closeScoreDialog(options = {}) {
 }
 
 function closeScannerDialog(options = {}) {
-  if (!scannerDialog.open || isScanning) {
+  if (!scannerDialog.open) {
     return;
   }
 
