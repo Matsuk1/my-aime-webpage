@@ -1319,6 +1319,17 @@ function errorMessageForCode(errorCode) {
   return "";
 }
 
+function restoreStatusAfterScoreDialog() {
+  const generatedKeys = new Set(["generated", "existingSlot", "clearedExpired"]);
+
+  if (!generatedKeys.has(statusText.dataset.statusKey)) {
+    return;
+  }
+
+  setStatusKey("waiting");
+  checkAvailability();
+}
+
 function resetMobileViewport() {
   clearTimeout(resetViewportTimer);
   resetViewportTimer = setTimeout(() => {
@@ -1448,6 +1459,7 @@ function closeScoreDialog(options = {}) {
   if (options.immediate) {
     scoreDialog.classList.remove("is-closing");
     scoreDialog.close();
+    restoreStatusAfterScoreDialog();
     return;
   }
 
@@ -1455,6 +1467,7 @@ function closeScoreDialog(options = {}) {
   dialogCloseTimer = setTimeout(() => {
     scoreDialog.classList.remove("is-closing");
     scoreDialog.close();
+    restoreStatusAfterScoreDialog();
   }, 180);
 }
 
