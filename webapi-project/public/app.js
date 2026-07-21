@@ -14,6 +14,7 @@ const scannerDialog = document.querySelector("#scannerDialog");
 const closeScannerButton = document.querySelector("#closeScannerButton");
 const captureScannerButton = document.querySelector("#captureScannerButton");
 const scannerVideo = document.querySelector("#scannerVideo");
+const scannerFreezeCanvas = document.querySelector("#scannerFreezeCanvas");
 const scannerStatus = document.querySelector("#scannerStatus");
 let availabilityTimer = null;
 let scoreImageUrl = "";
@@ -1105,6 +1106,7 @@ function stopScannerCamera() {
   scannerStream?.getTracks().forEach((track) => track.stop());
   scannerStream = null;
   scannerVideo.srcObject = null;
+  unfreezeScannerFrame();
   captureScannerButton.disabled = true;
 }
 
@@ -1177,6 +1179,25 @@ function captureScannerFrame() {
   canvas.height = Math.round(sh * scale);
   canvas.getContext("2d")?.drawImage(scannerVideo, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
   return canvas;
+}
+
+function freezeScannerFrame() {
+  const stage = document.querySelector(".scanner-stage");
+
+  if (!scannerVideo.videoWidth || !scannerVideo.videoHeight) {
+    return;
+  }
+
+  scannerFreezeCanvas.width = scannerVideo.videoWidth;
+  scannerFreezeCanvas.height = scannerVideo.videoHeight;
+  scannerFreezeCanvas.getContext("2d")?.drawImage(scannerVideo, 0, 0, scannerFreezeCanvas.width, scannerFreezeCanvas.height);
+  stage.classList.add("is-frozen");
+}
+
+function unfreezeScannerFrame() {
+  document.querySelector(".scanner-stage")?.classList.remove("is-frozen");
+  const context = scannerFreezeCanvas.getContext("2d");
+  context?.clearRect(0, 0, scannerFreezeCanvas.width, scannerFreezeCanvas.height);
 }
 
 function scheduleAvailabilityCountdown(nextAvailableAt) {
@@ -1370,9 +1391,12 @@ captureScannerButton.addEventListener("click", async () => {
   scanButton.disabled = true;
   queryButton.disabled = true;
   captureScannerButton.disabled = true;
+  let shouldResumePreview = true;
 
   try {
-    const digits = await recognizeAccessCodeFromCanvas(captureScannerFrame());
+    const scannerFrame = captureScannerFrame();
+    freezeScannerFrame();
+    const digits = await recognizeAccessCodeFromCanvas(scannerFrame);
 
     if (!digits) {
       setScannerStatusKey("scannerNoCode");
@@ -1382,11 +1406,16 @@ captureScannerButton.addEventListener("click", async () => {
     accessCodeInput.value = formatAccessCode(digits);
     setScannerStatusKey("scannerSuccess");
     setStatusKey("waiting");
+    shouldResumePreview = false;
     window.setTimeout(() => closeScannerDialog(), 260);
   } catch (error) {
     console.warn("Scanner failed:", error);
     setScannerStatusKey("scannerFailed");
   } finally {
+    if (shouldResumePreview) {
+      unfreezeScannerFrame();
+    }
+
     isScanning = false;
     scanButton.disabled = false;
     queryButton.disabled = false;
