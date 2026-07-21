@@ -83,10 +83,10 @@ body {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   height: 34px;
   min-height: 34px;
-  padding: 0 28px 0 10px;
+  padding: 0 24px 0 9px;
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 999px;
   background:
@@ -116,7 +116,7 @@ body {
 .language-picker::after {
   content: "";
   position: absolute;
-  right: 12px;
+  right: 10px;
   top: 50%;
   width: 7px;
   height: 7px;
@@ -130,7 +130,7 @@ body {
   appearance: none;
   min-height: 0;
   height: 32px;
-  width: 120px;
+  width: 42px;
   border: 0;
   border-radius: 0;
   padding: 0;
@@ -141,6 +141,7 @@ body {
   font-size: 12px;
   font-weight: 600;
   line-height: 32px;
+  text-align: center;
 }
 
 .language-picker select:focus {
@@ -914,7 +915,7 @@ button:focus-visible {
   }
 
   .language-picker select {
-    width: 96px;
+    width: 42px;
   }
 
   .app-shell {
