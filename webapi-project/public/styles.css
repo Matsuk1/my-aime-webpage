@@ -341,7 +341,11 @@ button:focus-visible {
   width: 19px;
   height: 19px;
   margin: 0 auto;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .scan-button:hover:not(:disabled) {
@@ -670,7 +674,11 @@ button:focus-visible {
   display: block;
   width: 17px;
   height: 17px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .scanner-close:active,
